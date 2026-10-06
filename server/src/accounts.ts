@@ -1,0 +1,94 @@
+import type Database from "better-sqlite3";
+
+export type AccountType = "cash" | "offset" | "super";
+
+export interface FinancialAccount {
+  id: number;
+  institution: string;
+  name: string;
+  type: AccountType;
+  balanceCents: number;
+  isMock: boolean;
+}
+
+export interface FinancialAccountInput {
+  institution: string;
+  name: string;
+  type: AccountType;
+  balanceCents: number;
+}
+
+export function getAccounts(db: Database.Database): FinancialAccount[] {
+  return db
+    .prepare(
+      `SELECT financial_account.id,
+              COALESCE(NULLIF(financial_account.institution, ''), provider.name, 'Sample institution') AS institution,
+              financial_account.name, financial_account.type,
+              financial_account.balance_cents AS balanceCents,
+              financial_account.is_mock AS isMock
+       FROM financial_account
+       LEFT JOIN provider ON provider.id = financial_account.provider_id
+       ORDER BY financial_account.is_mock DESC, institution, financial_account.name`,
+    )
+    .all()
+    .map((account) => {
+      const row = account as Omit<FinancialAccount, "isMock"> & { isMock: number };
+      return { ...row, isMock: Boolean(row.isMock) };
+    });
+}
+
+export function saveAccounts(db: Database.Database, accounts: FinancialAccountInput[]): FinancialAccount[] {
+  if (accounts.length > 100) {
+    throw new Error("You can save up to 100 accounts.");
+  }
+
+  for (const account of accounts) {
+    if (
+      typeof account.institution !== "string" ||
+      !account.institution.trim() ||
+      account.institution.trim().length > 80
+    ) {
+      throw new Error("Enter an institution or bank name of up to 80 characters.");
+    }
+    if (typeof account.name !== "string" || !account.name.trim() || account.name.trim().length > 80) {
+      throw new Error("Enter an account name of up to 80 characters.");
+    }
+    if (!["cash", "offset", "super"].includes(account.type)) {
+      throw new Error("Choose cash, offset, or super for each account.");
+    }
+    if (
+      !Number.isSafeInteger(account.balanceCents) ||
+      Math.abs(account.balanceCents) > 100_000_000_000
+    ) {
+      throw new Error("Enter a valid account balance up to $1 billion.");
+    }
+  }
+
+  const save = db.transaction(() => {
+    db.prepare("DELETE FROM financial_account WHERE is_mock = 0").run();
+    const insert = db.prepare(
+      `INSERT INTO financial_account (institution, name, type, balance_cents, is_mock)
+       VALUES (?, ?, ?, ?, 0)`,
+    );
+    for (const account of accounts) {
+      insert.run(
+        account.institution.trim(),
+        account.name.trim(),
+        account.type,
+        account.balanceCents,
+      );
+    }
+  });
+  save();
+  return getAccounts(db);
+}
+
+export function removeAccount(db: Database.Database, id: number): boolean {
+  const result = db.prepare("DELETE FROM financial_account WHERE id = ? AND is_mock = 0").run(id);
+  return result.changes > 0;
+}
+
+export function removeSampleAccount(db: Database.Database, id: number): boolean {
+  const result = db.prepare("DELETE FROM financial_account WHERE id = ? AND is_mock = 1").run(id);
+  return result.changes > 0;
+}

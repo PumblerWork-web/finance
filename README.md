@@ -29,7 +29,13 @@ Then open `http://127.0.0.1:3001`.
 
 The SQLite database is created in `data/finance.sqlite` by default and is excluded from Git. Set `FINANCE_DATA_DIR` to choose a different local data directory. The account password is salted and hashed with Node.js `scrypt`; session cookies are HttpOnly, SameSite Strict, and backed by hashed session tokens in SQLite. The server binds to loopback and is not exposed to the local network.
 
-All current financial figures are fictional demo data. They are seeded once into the local database and marked as mock data. No real financial provider connections, analytics, or cloud services are configured.
+Financial figures are seeded as fictional demo data. On the Mortgage page, add a separate loan split for each ME home-loan amount and enter its balance, optional interest rate and repayment, fixed or variable rate type, and weekly, fortnightly, or monthly repayment frequency. Add as many splits as needed; details stay in the local database. This is not a bank connection, and you should never enter your bank password. No real financial provider connections, analytics, or cloud services are configured.
+
+On the Accounts page, add accounts from multiple banks or funds by entering each institution, account name, type, and balance. The Super page is a focused view for adding and updating super fund accounts. Manually entered account balances replace the sample totals for their matching account type on the dashboard.
+
+Income and Spending accept dated entries with categories and optional notes; these entries power the dashboard cash-flow chart, monthly budgets, and Reports, and do not change account balances. Bills and Insurance support one-off or recurring entries and display the next due date. Budgets let you set monthly category limits. All sections can be edited or deleted and remain local to this device.
+
+To permanently remove fictional sample data, use **Settings → Sample data → Remove all sample data**. This deletes sample accounts, mortgage, income, spending, bills, and budgets while preserving manually entered accounts and mortgage splits. The choice is remembered locally, so sample data will not be reseeded on restart.
 
 ## Checks
 

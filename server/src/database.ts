@@ -36,14 +36,20 @@ export function createDatabase(filename: string): Database.Database {
       name TEXT NOT NULL,
       type TEXT NOT NULL CHECK (type IN ('cash', 'offset', 'super')),
       balance_cents INTEGER NOT NULL,
-      is_mock INTEGER NOT NULL DEFAULT 0 CHECK (is_mock IN (0, 1))
+      is_mock INTEGER NOT NULL DEFAULT 0 CHECK (is_mock IN (0, 1)),
+      institution TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS mortgage (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
       balance_cents INTEGER NOT NULL,
-      is_mock INTEGER NOT NULL DEFAULT 0 CHECK (is_mock IN (0, 1))
+      is_mock INTEGER NOT NULL DEFAULT 0 CHECK (is_mock IN (0, 1)),
+      interest_rate_bps INTEGER,
+      repayment_cents INTEGER,
+      rate_type TEXT NOT NULL DEFAULT 'variable' CHECK (rate_type IN ('variable', 'fixed')),
+      repayment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (repayment_frequency IN ('weekly', 'fortnightly', 'monthly')),
+      updated_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS monthly_summary (
@@ -70,14 +76,76 @@ export function createDatabase(filename: string): Database.Database {
       is_mock INTEGER NOT NULL DEFAULT 0 CHECK (is_mock IN (0, 1))
     );
 
+    CREATE TABLE IF NOT EXISTS finance_entry (
+      id INTEGER PRIMARY KEY,
+      kind TEXT NOT NULL CHECK (kind IN ('income', 'spending')),
+      amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+      category TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      entry_date TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS budget_plan (
+      id INTEGER PRIMARY KEY,
+      category TEXT NOT NULL UNIQUE,
+      limit_cents INTEGER NOT NULL CHECK (limit_cents > 0)
+    );
+
+    CREATE TABLE IF NOT EXISTS planner_item (
+      id INTEGER PRIMARY KEY,
+      kind TEXT NOT NULL CHECK (kind IN ('bill', 'insurance')),
+      name TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT '',
+      amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+      due_date TEXT NOT NULL,
+      recurrence TEXT NOT NULL CHECK (recurrence IN ('none', 'weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly')),
+      notes TEXT NOT NULL DEFAULT ''
+    );
+
     CREATE TABLE IF NOT EXISTS app_setting (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
   `);
 
+  ensureAccountColumns(db);
+  ensureMortgageColumns(db);
   seedMockData(db);
   return db;
+}
+
+function ensureAccountColumns(db: Database.Database): void {
+  const columns = new Set(
+    (db.prepare("PRAGMA table_info(financial_account)").all() as Array<{ name: string }>).map(
+      ({ name }) => name,
+    ),
+  );
+  if (!columns.has("institution")) {
+    db.exec("ALTER TABLE financial_account ADD COLUMN institution TEXT NOT NULL DEFAULT ''");
+  }
+}
+
+function ensureMortgageColumns(db: Database.Database): void {
+  const columns = new Set(
+    (db.prepare("PRAGMA table_info(mortgage)").all() as Array<{ name: string }>).map(
+      ({ name }) => name,
+    ),
+  );
+  if (!columns.has("interest_rate_bps")) {
+    db.exec("ALTER TABLE mortgage ADD COLUMN interest_rate_bps INTEGER");
+  }
+  if (!columns.has("repayment_cents")) {
+    db.exec("ALTER TABLE mortgage ADD COLUMN repayment_cents INTEGER");
+  }
+  if (!columns.has("rate_type")) {
+    db.exec("ALTER TABLE mortgage ADD COLUMN rate_type TEXT NOT NULL DEFAULT 'variable'");
+  }
+  if (!columns.has("repayment_frequency")) {
+    db.exec("ALTER TABLE mortgage ADD COLUMN repayment_frequency TEXT NOT NULL DEFAULT 'monthly'");
+  }
+  if (!columns.has("updated_at")) {
+    db.exec("ALTER TABLE mortgage ADD COLUMN updated_at TEXT");
+  }
 }
 
 function seedMockData(db: Database.Database): void {

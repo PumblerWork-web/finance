@@ -80,6 +80,39 @@ button { cursor: pointer; }
 .topbar-divider { background: #e9ecf1; height: 23px; width: 1px; }
 .topbar-user { height: 30px; width: 30px; }
 .dashboard-page, .secondary-page { margin: 0 auto; max-width: 1280px; padding: 31px 0 14px; }
+.dashboard-empty-state { align-items: flex-start; display: flex; flex-direction: column; margin: 30px auto 20px; max-width: 650px; padding: 28px; }
+.dashboard-empty-icon { align-items: center; background: #eff3ff; border-radius: 10px; color: #7185d1; display: flex; height: 48px; justify-content: center; margin-bottom: 17px; width: 48px; }
+.dashboard-empty-state h2 { color: #35445d; font-size: 17px; margin-bottom: 8px; }
+.dashboard-empty-state p { color: #8791a0; font-size: 12px; line-height: 1.7; margin-bottom: 19px; max-width: 510px; }
+.dashboard-empty-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.dashboard-section-empty { align-items: center; color: #9aa4b2; display: flex; font-size: 11px; justify-content: center; min-height: 100px; padding: 20px; text-align: center; }
+.snapshot-empty { min-height: 70px; }
+.finance-summary-strip { align-items: center; background: #fff; border: 1px solid #edf0f4; border-radius: 10px; color: #8791a0; display: flex; flex-wrap: wrap; font-size: 10px; gap: 9px 20px; justify-content: space-between; margin: 0 0 17px; padding: 14px 17px; }
+.finance-summary-strip strong { color: #35445d; font-size: 15px; }
+.finance-summary-strip > span { align-items: center; display: flex; gap: 8px; }
+.finance-entry-panel, .finance-list-panel, .report-chart-panel { margin: 17px 0; padding: 22px 24px; }
+.finance-entry-form { display: grid; gap: 15px 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.finance-entry-form > label, .budget-edit-row > label { color: #596579; display: grid; font-size: 11px; font-weight: 600; gap: 7px; min-width: 0; }
+.finance-entry-form input, .finance-entry-form select, .budget-edit-row input { background: #fff; border: 1px solid #e7eaf0; border-radius: 7px; color: #344156; font-size: 13px; min-width: 0; outline: none; padding: 11px 12px; width: 100%; }
+.finance-entry-form input:focus, .finance-entry-form select:focus, .budget-edit-row input:focus { border-color: #8ba0e9; box-shadow: 0 0 0 3px #617fe31a; }
+.finance-entry-form .money-input input, .budget-edit-row .money-input input { padding-left: 27px; }
+.entry-description-field { grid-column: 1 / -1; }
+.finance-form-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 9px; grid-column: 1 / -1; }
+.finance-list-panel .panel-heading { margin-bottom: 14px; }
+.finance-entry-list { display: grid; }
+.finance-entry-row { align-items: center; border-top: 1px solid #eff1f4; display: flex; flex-wrap: wrap; gap: 10px 14px; min-width: 0; padding: 12px 2px; }
+.finance-entry-date { color: #8791a0; flex: 0 0 95px; font-size: 10px; }
+.finance-entry-details { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 100px; }
+.finance-entry-details strong { color: #48566c; font-size: 11px; }
+.finance-entry-details span { color: #98a2b1; font-size: 10px; }
+.finance-entry-amount { color: #35445d; font-size: 12px; white-space: nowrap; }
+.budget-edit-form { display: grid; gap: 12px; margin-top: 17px; }
+.budget-edit-row { align-items: end; border-top: 1px solid #eff1f4; display: grid; gap: 12px; grid-template-columns: minmax(120px, 1fr) minmax(150px, 1fr) auto; padding-top: 13px; }
+.report-chart-panel .chart-wrap { height: 290px; }
+.report-empty-state { margin-top: 20px; padding: 25px; }
+.report-empty-state h2 { color: #46546b; font-size: 14px; }
+.report-empty-state p { color: #929cab; font-size: 11px; margin: 0; }
+.report-category-row { border-top: 1px solid #eff1f4; padding: 12px 2px; }
 .welcome-row { align-items: center; display: flex; justify-content: space-between; margin-bottom: 22px; }
 .eyebrow { color: #99a2af; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; margin-bottom: 7px; text-transform: uppercase; }
 h1, h2, p { margin-top: 0; }
@@ -221,8 +254,74 @@ h1, h2, p { margin-top: 0; }
 .settings-readonly { align-items: center; color: #788497; display: flex; font-size: 10px; justify-content: space-between; max-width: 450px; }.settings-readonly strong { color: #4e5b70; font-size: 10px; font-weight: 600; }
 .settings-actions { border-top: 1px solid #eff1f4; display: flex; justify-content: space-between; margin-top: 24px; padding-top: 18px; }
 .settings-readonly-note { align-self: center; color: #a0a9b6; font-size: 9px; }
+.sample-data-setting-icon { background: #fff3ee; color: #bd7567; }
+.sample-data-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; }
+.sample-data-actions > span { color: #9aa4b2; font-size: 10px; line-height: 1.5; }
+.remove-sample-button { background: #fff; border: 1px solid #efd3ce; border-radius: 7px; color: #aa594e; font-size: 10px; font-weight: 600; padding: 9px 12px; }
+.remove-sample-button:hover:not(:disabled) { background: #fff5f2; border-color: #e3b9b1; }
+.remove-sample-button:disabled { color: #929cab; cursor: not-allowed; opacity: .75; }
+.no-sample-badge { background: #eef8f2; border-color: #ddefe4; color: #57856d; }
+.no-sample-badge > span { background: #6aad87; }
 .settings-next { align-items: flex-start; background: #f0f3fc; border-radius: 10px; color: #7f8da9; display: flex; gap: 12px; margin-top: 15px; padding: 14px 16px; }
 .settings-next > span { color: #7385c5; }.settings-next strong { color: #53658c; font-size: 10px; }.settings-next p { color: #8390a8; font-size: 10px; margin: 4px 0 0; }
+.mortgage-panel { margin-top: 23px; max-width: 740px; padding: 25px; }
+.mortgage-notice { align-items: flex-start; background: #f3f7ff; border: 1px solid #e5edff; border-radius: 9px; color: #5e78bd; display: flex; gap: 11px; margin-bottom: 24px; padding: 13px 15px; }
+.mortgage-notice > svg { flex: 0 0 auto; margin-top: 1px; }
+.mortgage-notice p { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.mortgage-notice strong { color: #435d9f; font-size: 12px; }
+.mortgage-notice span, .mortgage-status { color: #7e899b; font-size: 11px; line-height: 1.5; }
+.mortgage-form { display: grid; gap: 15px; max-width: 560px; }
+.mortgage-form label { color: #596579; display: grid; font-size: 11px; font-weight: 600; gap: 7px; }
+.mortgage-form input, .mortgage-form select { background: #fff; border: 1px solid #e7eaf0; border-radius: 7px; color: #344156; font-size: 13px; min-width: 0; outline: none; padding: 11px 12px; width: 100%; }
+.mortgage-form input:focus, .mortgage-form select:focus { border-color: #8ba0e9; box-shadow: 0 0 0 3px #617fe31a; }
+.money-input, .suffix-input { align-items: center; display: flex; position: relative; }
+.money-input > span, .suffix-input > span { color: #8d97a6; font-size: 12px; pointer-events: none; position: absolute; }
+.money-input > span { left: 12px; }
+.money-input input { padding-left: 27px; }
+.suffix-input > span { right: 12px; }
+.suffix-input input { padding-right: 51px; }
+.mortgage-split { border: 1px solid #e9edf3; border-radius: 10px; display: grid; gap: 15px 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 22px 16px 16px; position: relative; }
+.mortgage-split legend { color: #43516a; font-size: 12px; font-weight: 700; padding: 0 6px; }
+.mortgage-split > label { min-width: 0; }
+.mortgage-split .remove-split-button { background: transparent; border: 0; color: #b66f65; font-size: 10px; padding: 4px; position: absolute; right: 12px; top: 8px; }
+.mortgage-split .remove-split-button:disabled { color: #b9c0ca; cursor: not-allowed; }
+.mortgage-split .fixed-rate-option { align-items: center; align-self: end; display: flex; gap: 8px; min-height: 39px; }
+.mortgage-split .fixed-rate-option input { accent-color: #617fe3; height: 16px; margin: 0; width: 16px; }
+.fixed-rate-option span { color: #8791a0; font-size: 10px; font-weight: 400; }
+.add-split-button { justify-self: start; padding: 9px 12px; }
+.mortgage-total { align-items: center; border-top: 1px solid #edf0f4; color: #788497; display: flex; font-size: 11px; justify-content: space-between; padding-top: 15px; }
+.mortgage-total strong { color: #35445d; font-size: 15px; }
+.mortgage-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 13px; margin-top: 3px; }
+.mortgage-actions > span { color: #99a2b0; font-size: 10px; }
+.mortgage-success { background: #eef8f2; border-radius: 7px; color: #438162; font-size: 11px; padding: 10px 12px; }
+.accounts-panel { margin-top: 23px; padding: 25px; }
+.accounts-sample-warning { align-items: center; background: #fff8f5; border: 1px solid #f3ded8; border-radius: 9px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin-bottom: 18px; padding: 13px 14px; }
+.accounts-sample-warning > div { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 200px; }
+.accounts-sample-warning strong { color: #9d5b50; font-size: 11px; }
+.accounts-sample-warning span { color: #a17d76; font-size: 10px; line-height: 1.5; }
+.accounts-list { display: grid; gap: 9px; }
+.accounts-list h2, .accounts-form-heading h2 { color: #46546b; font-size: 13px; margin: 0; }
+.account-card { align-items: center; background: #fff; border: 1px solid #edf0f4; border-radius: 9px; display: flex; gap: 12px; min-width: 0; padding: 12px; }
+.account-card-icon { align-items: center; background: #eff3ff; border-radius: 8px; color: #7086d0; display: flex; flex: 0 0 auto; height: 34px; justify-content: center; width: 34px; }
+.account-card-info { display: flex; flex: 1; flex-direction: column; gap: 4px; min-width: 0; }
+.account-card-info strong { color: #48566c; font-size: 11px; }
+.account-card-info span { color: #98a2b1; font-size: 10px; }
+.account-card-balance { color: #35445d; font-size: 12px; white-space: nowrap; }
+.account-delete-button { background: transparent; border: 1px solid #efd3ce; border-radius: 6px; color: #aa594e; flex: 0 0 auto; font-size: 9px; padding: 6px 8px; }
+.account-delete-button:hover { background: #fff5f2; border-color: #e3b9b1; }
+.sample-account { background: #fafbfc; }
+.sample-account-tag { background: #fff8e9; border-radius: 10px; color: #b48d48; font-size: 8px; font-weight: 700; padding: 5px 7px; }
+.accounts-divider { background: #eff1f4; height: 1px; margin: 22px 0; }
+.accounts-form { display: grid; gap: 15px; }
+.accounts-form-heading { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+.accounts-form-heading p { color: #929cab; font-size: 10px; margin: 5px 0 0; }
+.account-edit-card { border: 1px solid #e9edf3; border-radius: 10px; display: grid; gap: 15px 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; padding: 22px 16px 16px; position: relative; }
+.account-edit-card legend { color: #43516a; font-size: 12px; font-weight: 700; padding: 0 6px; }
+.account-edit-card > label { color: #596579; display: grid; font-size: 11px; font-weight: 600; gap: 7px; min-width: 0; }
+.account-edit-card input, .account-edit-card select { background: #fff; border: 1px solid #e7eaf0; border-radius: 7px; color: #344156; font-size: 13px; min-width: 0; outline: none; padding: 11px 12px; width: 100%; }
+.account-edit-card input:focus, .account-edit-card select:focus { border-color: #8ba0e9; box-shadow: 0 0 0 3px #617fe31a; }
+.account-edit-card .money-input > input { padding-left: 27px; }
+.account-edit-card .remove-split-button { background: transparent; border: 0; color: #b66f65; font-size: 10px; padding: 4px; position: absolute; right: 12px; top: 8px; }
 .coming-page { align-items: flex-start; display: flex; flex-direction: column; margin: 13vh auto 0; max-width: 460px; padding: 30px; }
 .coming-icon { align-items: center; background: #eef1ff; border-radius: 12px; color: #7185d1; display: flex; height: 52px; justify-content: center; margin-bottom: 25px; width: 52px; }
 .coming-page h1 { margin: 0 0 10px; }.coming-page p { color: #8993a2; font-size: 12px; line-height: 1.7; margin: 0 0 22px; }.coming-page .primary-button { font-size: 11px; }
@@ -268,5 +367,13 @@ h1, h2, p { margin-top: 0; }
   .data-disclaimer { align-items: flex-start; font-size: 8px; line-height: 1.5; }.updated-at { display: none; }
   .page-footer { align-items: flex-start; flex-direction: column; gap: 7px; margin: 8px -15px 0; padding: 12px 15px 0; }
   .auth-card { padding: 26px 22px 23px; }.auth-card > .brand { margin-bottom: 27px; }
-  .settings-panel { padding: 18px 15px; }.security-status { align-items: flex-start; }.enabled-pill { font-size: 8px; }.settings-actions { gap: 8px; }.settings-actions button { font-size: 9px; padding: 9px; }
+  .settings-panel, .mortgage-panel, .accounts-panel { padding: 18px 15px; }.security-status { align-items: flex-start; }.enabled-pill { font-size: 8px; }.settings-actions { gap: 8px; }.settings-actions button { font-size: 9px; padding: 9px; }
+  .mortgage-split, .account-edit-card { grid-template-columns: minmax(0, 1fr); }
+  .finance-entry-panel, .finance-list-panel, .report-chart-panel { padding: 18px 15px; }
+  .finance-entry-form, .budget-edit-row { grid-template-columns: minmax(0, 1fr); }
+  .entry-description-field, .finance-form-actions { grid-column: auto; }
+  .finance-entry-row { gap: 8px; }
+  .finance-entry-date { flex-basis: 78px; }
+  .finance-entry-amount { margin-left: auto; }
+  .report-chart-panel .chart-wrap { height: 230px; }
 }
