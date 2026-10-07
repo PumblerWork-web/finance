@@ -2,7 +2,10 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-export function createDatabase(filename: string): Database.Database {
+export function createDatabase(
+  filename: string,
+  options: { seedSampleData?: boolean } = {},
+): Database.Database {
   mkdirSync(path.dirname(filename), { recursive: true });
   const db = new Database(filename);
   db.pragma("journal_mode = WAL");
@@ -119,7 +122,7 @@ export function createDatabase(filename: string): Database.Database {
 
   ensureAccountColumns(db);
   ensureMortgageColumns(db);
-  seedMockData(db);
+  if (options.seedSampleData ?? true) seedMockData(db);
   return db;
 }
 

@@ -35,7 +35,7 @@ const currentDirectory = __dirname;
 const dataDirectory = process.env.FINANCE_DATA_DIR
   ? path.resolve(process.env.FINANCE_DATA_DIR)
   : path.resolve(currentDirectory, "../../data");
-const db = createDatabase(path.join(dataDirectory, "finance.sqlite"));
+const db = createDatabase(path.join(dataDirectory, "finance.sqlite"), { seedSampleData: false });
 const auth = createAuthService(db);
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
