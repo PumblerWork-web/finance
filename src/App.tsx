@@ -41,10 +41,12 @@ import type {
   FinanceEntry,
   FinanceReport,
   FinancialAccount,
+  IncomeRecurrence,
   MortgageSplit,
   PlannerItem,
   PlannerItemInput,
   PlannerKind,
+  RecurringIncome,
   Recurrence,
 } from "./types";
 
@@ -874,11 +876,16 @@ function todayInputDate(): string {
 
 function EntriesPage({ kind, onChanged }: { kind: "income" | "spending"; onChanged: () => Promise<void> }) {
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
+  const [recurringItems, setRecurringItems] = useState<RecurringIncome[]>([]);
+  const [report, setReport] = useState<FinanceReport | null>(null);
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [entryDate, setEntryDate] = useState(todayInputDate);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrence, setRecurrence] = useState<IncomeRecurrence>("monthly");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingRecurringId, setEditingRecurringId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -888,6 +895,11 @@ function EntriesPage({ kind, onChanged }: { kind: "income" | "spending"; onChang
   async function loadEntries() {
     const list = await api.entries(kind);
     setEntries(list);
+    if (kind === "income") {
+      const [schedules, currentReport] = await Promise.all([api.recurringIncome(), api.report()]);
+      setRecurringItems(schedules);
+      setReport(currentReport);
+    }
   }
 
   useEffect(() => {
@@ -902,6 +914,9 @@ function EntriesPage({ kind, onChanged }: { kind: "income" | "spending"; onChang
     setDescription("");
     setEntryDate(todayInputDate());
     setEditingId(null);
+    setEditingRecurringId(null);
+    setIsRecurring(false);
+    setRecurrence("monthly");
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -917,11 +932,23 @@ function EntriesPage({ kind, onChanged }: { kind: "income" | "spending"; onChang
       entryDate,
     };
     try {
-      if (editingId === null) await api.createEntry(entry);
+      if (kind === "income" && isRecurring) {
+        const schedule = {
+          amountCents: entry.amountCents,
+          category: entry.category,
+          description: entry.description,
+          nextDate: entry.entryDate,
+          recurrence,
+        };
+        if (editingRecurringId === null) await api.createRecurringIncome(schedule);
+        else await api.updateRecurringIncome(editingRecurringId, schedule);
+      } else if (editingId === null) await api.createEntry(entry);
       else await api.updateEntry(editingId, entry);
       await loadEntries();
       await onChanged();
-      setMessage(`${pageTitle} entry ${editingId === null ? "added" : "updated"}.`);
+      setMessage(kind === "income" && isRecurring
+        ? `Recurring income ${editingRecurringId === null ? "added" : "updated"}.`
+        : `${pageTitle} entry ${editingId === null ? "added" : "updated"}.`);
       resetEntryForm();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : `Unable to save ${kind} entry.`);
@@ -944,8 +971,24 @@ function EntriesPage({ kind, onChanged }: { kind: "income" | "spending"; onChang
     }
   }
 
+  async function removeRecurringIncome(item: RecurringIncome) {
+    if (!window.confirm(`Delete recurring ${item.category} income of ${formatMoney(item.amountCents)}?`)) return;
+    setError("");
+    try {
+      await api.deleteRecurringIncome(item.id);
+      await loadEntries();
+      await onChanged();
+      if (editingRecurringId === item.id) resetEntryForm();
+      setMessage("Recurring income deleted.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to delete recurring income.");
+    }
+  }
+
   function editEntry(entry: FinanceEntry) {
     setEditingId(entry.id);
+    setEditingRecurringId(null);
+    setIsRecurring(false);
     setAmount((entry.amountCents / 100).toFixed(2));
     setCategory(entry.category);
     setDescription(entry.description);
@@ -953,9 +996,24 @@ function EntriesPage({ kind, onChanged }: { kind: "income" | "spending"; onChang
     setMessage("");
   }
 
+  function editRecurringIncome(item: RecurringIncome) {
+    setEditingId(null);
+    setEditingRecurringId(item.id);
+    setIsRecurring(true);
+    setAmount((item.amountCents / 100).toFixed(2));
+    setCategory(item.category);
+    setDescription(item.description);
+    setEntryDate(item.nextDate);
+    setRecurrence(item.recurrence);
+    setMessage("");
+  }
+
   const monthTotal = entries
     .filter((entry) => entry.entryDate.slice(0, 7) === todayInputDate().slice(0, 7))
-    .reduce((total, entry) => total + entry.amountCents, 0);
+    .reduce((total, entry) => total + entry.amountCents, 0) +
+    (kind === "income" ? (report?.incomeCents ?? 0) - entries
+      .filter((entry) => entry.entryDate.slice(0, 7) === todayInputDate().slice(0, 7))
+      .reduce((total, entry) => total + entry.amountCents, 0) : 0);
 
   return (
     <div className="secondary-page">
@@ -963,19 +1021,27 @@ function EntriesPage({ kind, onChanged }: { kind: "income" | "spending"; onChang
         <div><div className="eyebrow">YOUR HOUSEHOLD CASH FLOW</div><h1>{pageTitle}</h1><p className="welcome-subtitle">Enter dated transactions to build your monthly totals, dashboard charts and reports.</p></div>
         <span className="demo-badge no-sample-badge"><span /> YOUR DATA</span>
       </div>
-      <div className="finance-summary-strip"><span>{pageTitle} this month</span><strong>{formatMoney(monthTotal)}</strong><span>{entries.length} saved {entries.length === 1 ? "entry" : "entries"}</span></div>
+      <div className="finance-summary-strip"><span>{pageTitle} this month</span><strong>{formatMoney(monthTotal)}</strong><span>{entries.length} saved {entries.length === 1 ? "entry" : "entries"}{kind === "income" && recurringItems.length > 0 ? " · includes expected recurring income" : ""}</span></div>
       <section className="panel finance-entry-panel">
         <div className="panel-heading"><div><h2>{editingId === null ? `Add ${kind} entry` : `Edit ${kind} entry`}</h2><p>Entries are for reports and charts only; they do not change account balances.</p></div></div>
         <form className="finance-entry-form" onSubmit={submit}>
           <label>Amount (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0.01" onChange={(event) => setAmount(event.target.value)} required step="0.01" type="number" value={amount} /></span></label>
           <label>{kind === "income" ? "Source or category" : "Category"}<input maxLength={80} onChange={(event) => setCategory(event.target.value)} placeholder={kind === "income" ? "e.g. Salary" : "e.g. Groceries"} required value={category} /></label>
-          <label>Date<input onChange={(event) => setEntryDate(event.target.value)} required type="date" value={entryDate} /></label>
+          <label>{isRecurring ? "Next payment date" : "Date"}<input onChange={(event) => setEntryDate(event.target.value)} required type="date" value={entryDate} /></label>
           <label className="entry-description-field">Notes (optional)<input maxLength={200} onChange={(event) => setDescription(event.target.value)} placeholder="Add a short note" value={description} /></label>
+          {kind === "income" && <label className="recurring-income-toggle"><input checked={isRecurring} onChange={(event) => {
+            setIsRecurring(event.target.checked);
+            setEditingId(null);
+            setEditingRecurringId(null);
+          }} type="checkbox" /> This is recurring income</label>}
+          {kind === "income" && isRecurring && <label>Frequency<select onChange={(event) => setRecurrence(event.target.value as IncomeRecurrence)} value={recurrence}>
+            <option value="weekly">Weekly</option><option value="fortnightly">Fortnightly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option>
+          </select></label>}
           {error && <div className="form-error" role="alert">{error}</div>}
           {message && <div className="mortgage-success" role="status">{message}</div>}
           <div className="finance-form-actions">
-            <button className="primary-button" disabled={saving}>{saving ? "Saving…" : editingId === null ? `Add ${kind}` : "Update entry"} <ArrowRight size={15} /></button>
-            {editingId !== null && <button className="secondary-button" onClick={resetEntryForm} type="button">Cancel edit</button>}
+            <button className="primary-button" disabled={saving}>{saving ? "Saving…" : isRecurring ? editingRecurringId === null ? "Add recurring income" : "Update recurring income" : editingId === null ? `Add ${kind}` : "Update entry"} <ArrowRight size={15} /></button>
+            {(editingId !== null || editingRecurringId !== null) && <button className="secondary-button" onClick={resetEntryForm} type="button">Cancel edit</button>}
           </div>
         </form>
       </section>
@@ -997,6 +1063,24 @@ function EntriesPage({ kind, onChanged }: { kind: "income" | "spending"; onChang
           </div>
         )}
       </section>
+      {kind === "income" && (
+        <section className="panel finance-list-panel">
+          <div className="panel-heading"><div><h2>Recurring income</h2><p>Expected income is included in this month’s dashboard totals and reports.</p></div></div>
+          {loading ? <p className="mortgage-status">Loading recurring income…</p> : recurringItems.length === 0 ? (
+            <p className="dashboard-section-empty">No recurring income schedules yet. Choose “This is recurring income” when adding regular pay or another expected payment.</p>
+          ) : (
+            <div className="finance-entry-list">{recurringItems.map((item) => (
+              <article className="finance-entry-row" key={item.id}>
+                <div className="finance-entry-date">{formatDate(item.nextDate, { year: "numeric" })}</div>
+                <div className="finance-entry-details"><strong>{item.category}</strong><span>Expected {({ weekly: "weekly", fortnightly: "fortnightly", monthly: "monthly", quarterly: "quarterly", yearly: "yearly" })[item.recurrence]} · Next {formatDate(item.nextDate, { year: "numeric" })}{item.description ? ` · ${item.description}` : ""}</span></div>
+                <strong className="finance-entry-amount">{formatMoney(item.amountCents)}</strong>
+                <button className="account-delete-button" onClick={() => editRecurringIncome(item)} type="button">Edit</button>
+                <button className="account-delete-button" onClick={() => void removeRecurringIncome(item)} type="button">Delete</button>
+              </article>
+            ))}</div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

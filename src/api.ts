@@ -11,6 +11,8 @@ import type {
   PlannerItemInput,
   EntryKind,
   PlannerKind,
+  RecurringIncome,
+  RecurringIncomeInput,
 } from "./types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -66,6 +68,12 @@ export const api = {
   updateEntry: (id: number, entry: FinanceEntryInput) =>
     request<FinanceEntry>(`/api/entries/${id}`, { method: "PUT", body: JSON.stringify(entry) }),
   deleteEntry: (id: number) => request<void>(`/api/entries/${id}`, { method: "DELETE" }),
+  recurringIncome: () => request<RecurringIncome[]>("/api/recurring-income"),
+  createRecurringIncome: (item: RecurringIncomeInput) =>
+    request<RecurringIncome>("/api/recurring-income", { method: "POST", body: JSON.stringify(item) }),
+  updateRecurringIncome: (id: number, item: RecurringIncomeInput) =>
+    request<RecurringIncome>(`/api/recurring-income/${id}`, { method: "PUT", body: JSON.stringify(item) }),
+  deleteRecurringIncome: (id: number) => request<void>(`/api/recurring-income/${id}`, { method: "DELETE" }),
   budgets: () => request<BudgetPlan[]>("/api/budgets"),
   saveBudgets: (budgets: Array<Omit<BudgetPlan, "id" | "spentCents">>) =>
     request<BudgetPlan[]>("/api/budgets", { method: "PUT", body: JSON.stringify({ budgets }) }),

@@ -35,6 +35,8 @@ On the Accounts page, add accounts from multiple banks or funds by entering each
 
 Income and Spending accept dated entries with categories and optional notes; these entries power the dashboard cash-flow chart, monthly budgets, and Reports, and do not change account balances. Bills and Insurance support one-off or recurring entries and display the next due date. Budgets let you set monthly category limits. All sections can be edited or deleted and remain local to this device.
 
+The Income page also supports recurring expected income (weekly, fortnightly, monthly, quarterly, or yearly). Expected payments are included in dashboard totals and reports, but are not treated as received transactions and do not update account balances.
+
 To permanently remove fictional sample data, use **Accounts → Remove all sample data**. This deletes sample accounts, mortgage, income, spending, bills, and budgets while preserving manually entered accounts and mortgage splits. The choice is remembered locally, so sample data will not be reseeded on restart.
 
 ## Checks

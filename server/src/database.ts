@@ -85,6 +85,15 @@ export function createDatabase(filename: string): Database.Database {
       entry_date TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS recurring_income (
+      id INTEGER PRIMARY KEY,
+      amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+      category TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      next_date TEXT NOT NULL,
+      recurrence TEXT NOT NULL CHECK (recurrence IN ('weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly'))
+    );
+
     CREATE TABLE IF NOT EXISTS budget_plan (
       id INTEGER PRIMARY KEY,
       category TEXT NOT NULL UNIQUE,

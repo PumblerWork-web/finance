@@ -9,12 +9,16 @@ import { removeSampleData } from "./sampleData";
 import {
   createEntry,
   createPlannerItem,
+  createRecurringIncome,
   deleteEntry,
+  deleteRecurringIncome,
   deletePlannerItem,
   getFinanceReport,
   getPlannerUpcoming,
   listBudgets,
   listEntries,
+  listRecurringIncome,
+  recurringIncomeForMonth,
   saveBudgets,
   updatePlannerItem,
   updateEntry,
@@ -91,6 +95,30 @@ test("income and spending entries drive budgets, reports and dashboard charts", 
 
   assert.equal(deleteEntry(db, income.id), true);
   assert.equal(deleteEntry(db, income.id), false);
+  db.close();
+});
+
+test("recurring income is scheduled, editable, and included in dashboard and report expectations", () => {
+  const db = createDatabase(":memory:");
+  const salary = createRecurringIncome(db, {
+    amountCents: 500000,
+    category: "Salary",
+    description: "Fortnightly pay",
+    nextDate: "2026-10-02",
+    recurrence: "fortnightly",
+  });
+  assert.equal(listRecurringIncome(db, new Date("2026-10-06T12:00:00")).length, 1);
+  assert.equal(listRecurringIncome(db, new Date("2026-10-06T12:00:00"))[0].nextDate, "2026-10-16");
+  assert.equal(recurringIncomeForMonth(db, "2026-10"), 1_500_000);
+
+  const dashboard = getDashboardData(db, new Date("2026-10-06T12:00:00"));
+  assert.equal(dashboard.monthlyIncomeCents, 1_500_000);
+  assert.equal(dashboard.monthlySpendingCents, 0);
+  assert.equal(dashboard.personalDataPresent, true);
+  assert.equal(dashboard.spendingHistory.at(-1)?.incomeCents, 1_500_000);
+  assert.equal(getFinanceReport(db, new Date("2026-10-06T12:00:00")).incomeCents, 1_500_000);
+  assert.equal(deleteRecurringIncome(db, salary.id), true);
+  assert.equal(recurringIncomeForMonth(db, "2026-10"), 0);
   db.close();
 });
 

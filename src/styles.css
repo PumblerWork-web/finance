@@ -96,6 +96,8 @@ button { cursor: pointer; }
 .finance-entry-form input, .finance-entry-form select, .budget-edit-row input { background: #fff; border: 1px solid #e7eaf0; border-radius: 7px; color: #344156; font-size: 13px; min-width: 0; outline: none; padding: 11px 12px; width: 100%; }
 .finance-entry-form input:focus, .finance-entry-form select:focus, .budget-edit-row input:focus { border-color: #8ba0e9; box-shadow: 0 0 0 3px #617fe31a; }
 .finance-entry-form .money-input input, .budget-edit-row .money-input input { padding-left: 27px; }
+.finance-entry-form .recurring-income-toggle { align-items: center; display: flex; flex-direction: row; gap: 9px; grid-column: 1 / -1; }
+.recurring-income-toggle input { accent-color: #617fe3; height: 16px; margin: 0; width: 16px; }
 .entry-description-field { grid-column: 1 / -1; }
 .finance-form-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 9px; grid-column: 1 / -1; }
 .finance-list-panel .panel-heading { margin-bottom: 14px; }
@@ -368,7 +370,7 @@ h1, h2, p { margin-top: 0; }
   .mortgage-split, .account-edit-card { grid-template-columns: minmax(0, 1fr); }
   .finance-entry-panel, .finance-list-panel, .report-chart-panel { padding: 18px 15px; }
   .finance-entry-form, .budget-edit-row { grid-template-columns: minmax(0, 1fr); }
-  .entry-description-field, .finance-form-actions { grid-column: auto; }
+  .entry-description-field, .finance-form-actions, .finance-entry-form .recurring-income-toggle { grid-column: auto; }
   .finance-entry-row { gap: 8px; }
   .finance-entry-date { flex-basis: 78px; }
   .finance-entry-amount { margin-left: auto; }

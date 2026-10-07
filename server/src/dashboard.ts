@@ -1,6 +1,12 @@
 import type Database from "better-sqlite3";
 import { hasSampleData } from "./sampleData";
-import { getDashboardEntryHistory, getPlannerUpcoming, listBudgets } from "./finance";
+import {
+  getDashboardEntryHistory,
+  getPlannerUpcoming,
+  listBudgets,
+  listRecurringIncome,
+  recurringIncomeForMonth,
+} from "./finance";
 
 export interface DashboardData {
   sampleDataPresent: boolean;
@@ -56,6 +62,7 @@ export function getDashboardData(db: Database.Database, now = new Date()): Dashb
           SELECT id FROM financial_account WHERE is_mock = 0
           UNION ALL SELECT id FROM mortgage WHERE is_mock = 0
           UNION ALL SELECT id FROM finance_entry
+          UNION ALL SELECT id FROM recurring_income
           UNION ALL SELECT id FROM planner_item
           UNION ALL SELECT id FROM budget_plan
         )
@@ -66,8 +73,10 @@ export function getDashboardData(db: Database.Database, now = new Date()): Dashb
   const manualEntryCount = (db.prepare("SELECT COUNT(*) AS count FROM finance_entry").get() as {
     count: number;
   }).count;
+  const recurringIncome = listRecurringIncome(db, now);
+  const hasIncomeData = manualEntryCount > 0 || recurringIncome.length > 0;
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const monthly = manualEntryCount
+  const monthly = hasIncomeData
     ? db.prepare(
       `SELECT
          COALESCE(SUM(CASE WHEN kind = 'income' THEN amount_cents ELSE 0 END), 0) AS incomeCents,
@@ -94,10 +103,10 @@ export function getDashboardData(db: Database.Database, now = new Date()): Dashb
     offsetCents,
     superCents,
     mortgageCents,
-    monthlyIncomeCents: monthly?.incomeCents ?? 0,
+    monthlyIncomeCents: (monthly?.incomeCents ?? 0) + recurringIncomeForMonth(db, currentMonth),
     monthlySpendingCents: monthly?.spendingCents ?? 0,
-    monthlySurplusCents: (monthly?.incomeCents ?? 0) - (monthly?.spendingCents ?? 0),
-    spendingHistory: manualEntryCount ? getDashboardEntryHistory(db, now) : db
+    monthlySurplusCents: (monthly?.incomeCents ?? 0) + recurringIncomeForMonth(db, currentMonth) - (monthly?.spendingCents ?? 0),
+    spendingHistory: hasIncomeData ? getDashboardEntryHistory(db, now) : db
       .prepare(
         "SELECT month, income_cents AS incomeCents, spending_cents AS spendingCents FROM monthly_summary ORDER BY month",
       )

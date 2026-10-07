@@ -67,6 +67,19 @@ export interface FinanceEntry {
 
 export interface FinanceEntryInput extends Omit<FinanceEntry, "id"> {}
 
+export type IncomeRecurrence = Exclude<Recurrence, "none">;
+
+export interface RecurringIncome {
+  id: number;
+  amountCents: number;
+  category: string;
+  description: string;
+  nextDate: string;
+  recurrence: IncomeRecurrence;
+}
+
+export interface RecurringIncomeInput extends Omit<RecurringIncome, "id"> {}
+
 export interface BudgetPlan {
   id: number;
   category: string;

@@ -21,6 +21,19 @@ export interface FinanceEntryInput {
   entryDate: string;
 }
 
+export type IncomeRecurrence = Exclude<Recurrence, "none">;
+
+export interface RecurringIncome {
+  id: number;
+  amountCents: number;
+  category: string;
+  description: string;
+  nextDate: string;
+  recurrence: IncomeRecurrence;
+}
+
+export type RecurringIncomeInput = Omit<RecurringIncome, "id">;
+
 export interface BudgetPlan {
   id: number;
   category: string;
@@ -52,6 +65,129 @@ export interface FinanceReport {
   categories: Array<{ category: string; spendingCents: number }>;
   incomeCents: number;
   spendingCents: number;
+}
+
+export function listRecurringIncome(db: Database.Database, now = new Date()): RecurringIncome[] {
+  const schedules = db.prepare(
+    `SELECT id, amount_cents AS amountCents, category, description, next_date AS nextDate, recurrence
+     FROM recurring_income ORDER BY next_date, category COLLATE NOCASE`,
+  ).all() as RecurringIncome[];
+  return schedules.map((schedule) => ({
+    ...schedule,
+    nextDate: nextOccurrence(schedule.nextDate, schedule.recurrence, now),
+  }));
+}
+
+export function createRecurringIncome(db: Database.Database, input: RecurringIncomeInput): RecurringIncome {
+  validateRecurringIncome(input);
+  const result = db.prepare(
+    `INSERT INTO recurring_income (amount_cents, category, description, next_date, recurrence)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run(input.amountCents, input.category.trim(), input.description.trim(), input.nextDate, input.recurrence);
+  return {
+    id: Number(result.lastInsertRowid),
+    ...input,
+    category: input.category.trim(),
+    description: input.description.trim(),
+  };
+}
+
+export function updateRecurringIncome(
+  db: Database.Database,
+  id: number,
+  input: RecurringIncomeInput,
+): RecurringIncome | null {
+  validateRecurringIncome(input);
+  const result = db.prepare(
+    `UPDATE recurring_income
+     SET amount_cents = ?, category = ?, description = ?, next_date = ?, recurrence = ?
+     WHERE id = ?`,
+  ).run(input.amountCents, input.category.trim(), input.description.trim(), input.nextDate, input.recurrence, id);
+  if (!result.changes) return null;
+  return {
+    id,
+    ...input,
+    category: input.category.trim(),
+    description: input.description.trim(),
+  };
+}
+
+export function deleteRecurringIncome(db: Database.Database, id: number): boolean {
+  return db.prepare("DELETE FROM recurring_income WHERE id = ?").run(id).changes > 0;
+}
+
+function validateRecurringIncome(input: RecurringIncomeInput): void {
+  validateAmount(input.amountCents, "income amount");
+  if (typeof input.category !== "string" || !input.category.trim() || input.category.trim().length > 80) {
+    throw new Error("Enter an income source or category of up to 80 characters.");
+  }
+  if (typeof input.description !== "string" || input.description.length > 200) {
+    throw new Error("Notes must be 200 characters or fewer.");
+  }
+  validateDate(input.nextDate, "next payment");
+  if (!["weekly", "fortnightly", "monthly", "quarterly", "yearly"].includes(input.recurrence)) {
+    throw new Error("Choose a valid recurring income frequency.");
+  }
+}
+
+function occurrenceAt(anchorValue: string, recurrence: IncomeRecurrence, index: number): Date {
+  const anchor = new Date(`${anchorValue}T12:00:00`);
+  if (recurrence === "weekly" || recurrence === "fortnightly") {
+    anchor.setDate(anchor.getDate() + index * (recurrence === "weekly" ? 7 : 14));
+    return anchor;
+  }
+  const step = recurrence === "monthly" ? 1 : recurrence === "quarterly" ? 3 : 12;
+  const monthIndex = anchor.getMonth() + step * index;
+  const year = anchor.getFullYear() + Math.floor(monthIndex / 12);
+  const month = monthIndex % 12;
+  const day = Math.min(anchor.getDate(), new Date(year, month + 1, 0).getDate());
+  return new Date(year, month, day, 12);
+}
+
+function asDateString(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function nextOccurrence(anchor: string, recurrence: IncomeRecurrence, now: Date): string {
+  let index = 0;
+  while (occurrenceAt(anchor, recurrence, index) < now) index++;
+  return asDateString(occurrenceAt(anchor, recurrence, index));
+}
+
+function recurringIncomeByMonth(
+  db: Database.Database,
+  months: string[],
+): Map<string, number> {
+  const totals = new Map(months.map((month) => [month, 0]));
+  if (!months.length) return totals;
+  const schedules = db.prepare(
+    "SELECT amount_cents AS amountCents, next_date AS nextDate, recurrence FROM recurring_income",
+  ).all() as Array<Pick<RecurringIncome, "amountCents" | "nextDate" | "recurrence">>;
+  const firstMonth = months[0];
+  const lastMonth = months[months.length - 1];
+  const rangeStart = new Date(`${firstMonth}-01T00:00:00`);
+  const rangeEnd = new Date(`${lastMonth}-01T00:00:00`);
+  rangeEnd.setMonth(rangeEnd.getMonth() + 1);
+
+  for (const schedule of schedules) {
+    let index = 0;
+    let occurrence = occurrenceAt(schedule.nextDate, schedule.recurrence, index);
+    while (occurrence < rangeStart) {
+      index++;
+      occurrence = occurrenceAt(schedule.nextDate, schedule.recurrence, index);
+    }
+    while (occurrence < rangeEnd) {
+      const month = asDateString(occurrence).slice(0, 7);
+      totals.set(month, (totals.get(month) ?? 0) + schedule.amountCents);
+      index++;
+      occurrence = occurrenceAt(schedule.nextDate, schedule.recurrence, index);
+    }
+  }
+  return totals;
+}
+
+export function recurringIncomeForMonth(db: Database.Database, month: string): number {
+  return recurringIncomeByMonth(db, [month]).get(month) ?? 0;
 }
 
 function validateDate(value: string, label: string): void {
@@ -235,13 +371,30 @@ function nextDueDate(dueDate: string, recurrence: Recurrence, now: Date): string
 
 export function getFinanceReport(db: Database.Database, now = new Date()): FinanceReport {
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const monthly = db.prepare(
+  const actualMonthly = db.prepare(
     `SELECT substr(entry_date, 1, 7) AS month,
             SUM(CASE WHEN kind = 'income' THEN amount_cents ELSE 0 END) AS incomeCents,
             SUM(CASE WHEN kind = 'spending' THEN amount_cents ELSE 0 END) AS spendingCents
      FROM finance_entry WHERE entry_date >= date(?, '-11 months', 'start of month')
      GROUP BY substr(entry_date, 1, 7) ORDER BY month`,
   ).all(`${month}-01`) as FinanceReport["monthly"];
+  const reportMonths = Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(`${month}-01T00:00:00`);
+    date.setMonth(date.getMonth() - (11 - index));
+    return asDateString(date).slice(0, 7);
+  });
+  const scheduledIncome = recurringIncomeByMonth(db, reportMonths);
+  const monthlyByMonth = new Map(actualMonthly.map((item) => [item.month, item]));
+  const monthly = reportMonths
+    .filter((reportMonth) => monthlyByMonth.has(reportMonth) || (scheduledIncome.get(reportMonth) ?? 0) > 0)
+    .map((reportMonth) => {
+      const actual = monthlyByMonth.get(reportMonth);
+      return {
+        month: reportMonth,
+        incomeCents: (actual?.incomeCents ?? 0) + (scheduledIncome.get(reportMonth) ?? 0),
+        spendingCents: actual?.spendingCents ?? 0,
+      };
+    });
   const totals = db.prepare(
     `SELECT SUM(CASE WHEN kind = 'income' THEN amount_cents ELSE 0 END) AS incomeCents,
             SUM(CASE WHEN kind = 'spending' THEN amount_cents ELSE 0 END) AS spendingCents
@@ -255,7 +408,7 @@ export function getFinanceReport(db: Database.Database, now = new Date()): Finan
   return {
     monthly,
     categories,
-    incomeCents: totals.incomeCents ?? 0,
+    incomeCents: (totals.incomeCents ?? 0) + (scheduledIncome.get(month) ?? 0),
     spendingCents: totals.spendingCents ?? 0,
   };
 }
@@ -265,7 +418,7 @@ export function getDashboardEntryHistory(db: Database.Database, now = new Date()
   incomeCents: number;
   spendingCents: number;
 }> {
-  return db.prepare(
+  const actual = db.prepare(
     `SELECT substr(entry_date, 1, 7) AS month,
             SUM(CASE WHEN kind = 'income' THEN amount_cents ELSE 0 END) AS incomeCents,
             SUM(CASE WHEN kind = 'spending' THEN amount_cents ELSE 0 END) AS spendingCents
@@ -277,6 +430,22 @@ export function getDashboardEntryHistory(db: Database.Database, now = new Date()
     incomeCents: number;
     spendingCents: number;
   }>;
+  const months = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+    return asDateString(date).slice(0, 7);
+  });
+  const scheduledIncome = recurringIncomeByMonth(db, months);
+  const actualByMonth = new Map(actual.map((item) => [item.month, item]));
+  return months
+    .filter((month) => actualByMonth.has(month) || (scheduledIncome.get(month) ?? 0) > 0)
+    .map((month) => {
+      const entry = actualByMonth.get(month);
+      return {
+        month,
+        incomeCents: (entry?.incomeCents ?? 0) + (scheduledIncome.get(month) ?? 0),
+        spendingCents: entry?.spendingCents ?? 0,
+      };
+    });
 }
 
 export function getPlannerUpcoming(

@@ -9,20 +9,25 @@ import { removeSampleData } from "./sampleData";
 import {
   createEntry,
   createPlannerItem,
+  createRecurringIncome,
+  deleteRecurringIncome,
   deleteEntry,
   deletePlannerItem,
   getFinanceReport,
   listBudgets,
   listEntries,
   listPlannerItems,
+  listRecurringIncome,
   saveBudgets,
   updateEntry,
   updatePlannerItem,
+  updateRecurringIncome,
   type BudgetInput,
   type EntryKind,
   type FinanceEntryInput,
   type PlannerItemInput,
   type PlannerKind,
+  type RecurringIncomeInput,
   type Recurrence,
 } from "./finance";
 
@@ -137,6 +142,57 @@ app.get("/api/entries", requireAuth, (req, res) => {
     return;
   }
   res.json(listEntries(db, kind));
+});
+
+app.get("/api/recurring-income", requireAuth, (_req, res) => {
+  res.json(listRecurringIncome(db));
+});
+
+app.post("/api/recurring-income", requireAuth, (req, res, next) => {
+  try {
+    res.status(201).json(createRecurringIncome(db, parseRecurringIncome(req.body)));
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+});
+
+app.put("/api/recurring-income/:id", requireAuth, (req, res, next) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Choose a valid recurring income item." });
+    return;
+  }
+  try {
+    const item = updateRecurringIncome(db, id, parseRecurringIncome(req.body));
+    if (!item) {
+      res.status(404).json({ error: "That recurring income item was not found." });
+      return;
+    }
+    res.json(item);
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+});
+
+app.delete("/api/recurring-income/:id", requireAuth, (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Choose a valid recurring income item." });
+    return;
+  }
+  if (!deleteRecurringIncome(db, id)) {
+    res.status(404).json({ error: "That recurring income item was not found." });
+    return;
+  }
+  res.status(204).end();
 });
 
 app.post("/api/entries", requireAuth, (req, res, next) => {
@@ -480,6 +536,27 @@ function parseBudget(value: unknown): BudgetInput {
     throw new Error("Enter valid budget details.");
   }
   return { category: budget.category, limitCents: budget.limitCents };
+}
+
+function parseRecurringIncome(value: unknown): RecurringIncomeInput {
+  if (!value || typeof value !== "object") throw new Error("Enter valid recurring income details.");
+  const item = value as Record<string, unknown>;
+  if (
+    typeof item.amountCents !== "number" ||
+    typeof item.category !== "string" ||
+    typeof item.description !== "string" ||
+    typeof item.nextDate !== "string" ||
+    typeof item.recurrence !== "string"
+  ) {
+    throw new Error("Enter valid recurring income details.");
+  }
+  return {
+    amountCents: item.amountCents,
+    category: item.category,
+    description: item.description,
+    nextDate: item.nextDate,
+    recurrence: item.recurrence as RecurringIncomeInput["recurrence"],
+  };
 }
 
 function parsePlannerItem(value: unknown): PlannerItemInput {
