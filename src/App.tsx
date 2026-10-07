@@ -288,8 +288,6 @@ export default function App() {
           <SettingsPage
             displayName={auth.displayName ?? ""}
             onLogout={handleLogout}
-            onRemoveSampleData={handleRemoveSampleData}
-            sampleDataPresent={data?.sampleDataPresent ?? false}
           />
           ) : (
             <ComingSoonPage page={activePage} onDashboard={() => setActivePage("Dashboard")} />
@@ -608,38 +606,10 @@ function ChartTooltip({
 function SettingsPage({
   displayName,
   onLogout,
-  onRemoveSampleData,
-  sampleDataPresent,
 }: {
   displayName: string;
   onLogout: () => Promise<void>;
-  onRemoveSampleData: () => Promise<void>;
-  sampleDataPresent: boolean;
 }) {
-  const [removingSamples, setRemovingSamples] = useState(false);
-  const [sampleMessage, setSampleMessage] = useState("");
-  const [sampleError, setSampleError] = useState("");
-
-  async function removeSamples() {
-    if (!sampleDataPresent || removingSamples) return;
-    const confirmed = window.confirm(
-      "Permanently remove all fictional sample accounts, mortgage, income, spending, bills and budgets? Your manually entered accounts and mortgage splits will be kept.",
-    );
-    if (!confirmed) return;
-
-    setRemovingSamples(true);
-    setSampleError("");
-    setSampleMessage("");
-    try {
-      await onRemoveSampleData();
-      setSampleMessage("All sample data has been removed. It will not be added again.");
-    } catch (reason) {
-      setSampleError(reason instanceof Error ? reason.message : "Unable to remove sample data.");
-    } finally {
-      setRemovingSamples(false);
-    }
-  }
-
   return (
     <div className="secondary-page">
       <div className="welcome-row"><div><div className="eyebrow">PERSONALISE YOUR SPACE</div><h1>Settings</h1><p className="welcome-subtitle">Your dashboard preferences and local security.</p></div></div>
@@ -650,16 +620,6 @@ function SettingsPage({
         <div className="settings-section-title"><div className="settings-section-icon security-setting-icon"><ShieldCheck size={18} /></div><div><h2>Privacy &amp; security</h2><p>Your dashboard is only available on this computer.</p></div></div>
         <div className="security-status"><span><LockKeyhole size={17} /></span><div><strong>Password protection is on</strong><small>Your password is securely hashed and never stored as plain text.</small></div><span className="enabled-pill"><Check size={13} /> Enabled</span></div>
         <div className="security-status"><span><House size={17} /></span><div><strong>Local-only connection</strong><small>The app listens on this computer and is not exposed to your network.</small></div><span className="enabled-pill"><Check size={13} /> Private</span></div>
-        <div className="settings-divider" />
-        <div className="settings-section-title"><div className="settings-section-icon sample-data-setting-icon"><CircleHelp size={18} /></div><div><h2>Sample data</h2><p>Remove fictional demo accounts, loan figures, income, spending, bills and budgets. Your own manually entered data will be kept.</p></div></div>
-        {sampleError && <div className="form-error" role="alert">{sampleError}</div>}
-        {sampleMessage && <div className="mortgage-success" role="status">{sampleMessage}</div>}
-        <div className="sample-data-actions">
-          <button className="remove-sample-button" disabled={!sampleDataPresent || removingSamples} onClick={removeSamples} type="button">
-            {removingSamples ? "Removing sample data…" : sampleDataPresent ? "Remove all sample data" : "No sample data to remove"}
-          </button>
-          <span>{sampleDataPresent ? "This is permanent. Your personal accounts and loan splits are not deleted." : "Sample data is already cleared and will not return when you restart the app."}</span>
-        </div>
         <div className="settings-divider" />
         <div className="settings-section-title"><div className="settings-section-icon"><HeartPulse size={18} /></div><div><h2>Financial year</h2><p>Australian financial year runs from 1 July to 30 June.</p></div></div>
         <div className="settings-readonly"><span>Financial year</span><strong>Australian (July – June)</strong></div>
