@@ -705,12 +705,14 @@ interface AccountDraft {
   accountId?: number;
   institution: string;
   name: string;
+  bsb: string;
+  accountNumber: string;
   type: AccountType;
   balance: string;
 }
 
 function newAccountDraft(type: AccountType = "cash"): AccountDraft {
-  return { institution: "", name: "", type, balance: "" };
+  return { institution: "", name: "", bsb: "", accountNumber: "", type, balance: "" };
 }
 
 function AccountsPage({
@@ -742,6 +744,8 @@ function AccountsPage({
           accountId: account.id,
           institution: account.institution,
           name: account.name,
+          bsb: account.bsb,
+          accountNumber: account.accountNumber,
           type: account.type,
           balance: (account.balanceCents / 100).toFixed(2),
         })));
@@ -761,6 +765,8 @@ function AccountsPage({
       const editedAccounts = drafts.map((account) => ({
         institution: account.institution,
         name: account.name,
+        bsb: account.bsb,
+        accountNumber: account.accountNumber,
         type: account.type,
         balanceCents: Math.round(Number(account.balance) * 100),
       }));
@@ -768,9 +774,11 @@ function AccountsPage({
         ? []
         : accounts
           .filter((account) => !account.isMock && account.type !== accountType)
-          .map(({ institution, name, type, balanceCents }) => ({
+          .map(({ institution, name, bsb, accountNumber, type, balanceCents }) => ({
             institution,
             name,
+            bsb,
+            accountNumber,
             type,
             balanceCents,
           }));
@@ -877,6 +885,9 @@ function AccountsPage({
               <div className="account-card-info">
                 <strong>{account.name}</strong>
                 <span>{account.institution || "Sample institution"} · {accountTypeLabel(account.type)}</span>
+                {(account.bsb || account.accountNumber) && (
+                  <span>{[account.bsb && `BSB ${account.bsb}`, account.accountNumber && `Acc ${account.accountNumber}`].filter(Boolean).join(" · ")}</span>
+                )}
               </div>
               <strong className="account-card-balance">{formatMoney(account.balanceCents)}</strong>
               {account.isMock && <span className="sample-account-tag">SAMPLE</span>}
@@ -902,6 +913,14 @@ function AccountsPage({
               <label>
                 Account name
                 <input maxLength={80} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} placeholder="e.g. Everyday account" required value={account.name} />
+              </label>
+              <label>
+                BSB (optional)
+                <input autoComplete="off" inputMode="numeric" maxLength={7} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, bsb: event.target.value } : item))} pattern="\d{3}-?\d{3}" placeholder="e.g. 123-456" title="6 digits, for example 123-456" value={account.bsb} />
+              </label>
+              <label>
+                Account number (optional)
+                <input autoComplete="off" maxLength={20} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, accountNumber: event.target.value } : item))} placeholder="e.g. 12345678" value={account.accountNumber} />
               </label>
               <label>
                 Account type

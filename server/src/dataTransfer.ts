@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 const backupTables = {
   provider: ["id", "name", "type", "is_mock"],
-  financial_account: ["id", "provider_id", "name", "type", "balance_cents", "is_mock", "institution"],
+  financial_account: ["id", "provider_id", "name", "type", "balance_cents", "is_mock", "institution", "bsb", "account_number"],
   mortgage: ["id", "name", "balance_cents", "is_mock", "interest_rate_bps", "repayment_cents", "rate_type", "repayment_frequency", "updated_at"],
   personal_loan: ["id", "name", "lender", "type", "balance_cents", "interest_rate_bps", "repayment_cents", "repayment_frequency", "updated_at"],
   monthly_summary: ["month", "income_cents", "spending_cents", "is_mock"],
@@ -66,7 +66,13 @@ export function restoreBackup(db: Database.Database, value: unknown): void {
   const tables = value.tables as Record<string, unknown>;
   for (const [table, columns] of Object.entries(backupTables) as Array<[TableName, readonly string[]]>) {
     const rows = tables[table] ?? (value.version === 1 && table === "personal_loan" ? [] : undefined);
-    if (!Array.isArray(rows) || rows.some((row) => !isValidRow(row, columns))) {
+    if (table === "financial_account" && Array.isArray(rows)) {
+      tables[table] = rows.map((row) =>
+        isRecord(row) ? { bsb: "", account_number: "", ...row } : row,
+      );
+    }
+    const checkedRows = tables[table] ?? rows;
+    if (!Array.isArray(checkedRows) || checkedRows.some((row) => !isValidRow(row, columns))) {
       throw new Error("This backup is incomplete or contains invalid data.");
     }
   }

@@ -37,6 +37,8 @@ export interface FinancialAccount {
   id: number;
   institution: string;
   name: string;
+  bsb: string;
+  accountNumber: string;
   type: AccountType;
   balanceCents: number;
   isMock: boolean;

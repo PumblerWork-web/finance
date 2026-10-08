@@ -240,6 +240,26 @@ test("manual account entries validate fields and balances", () => {
   db.close();
 });
 
+test("accounts store BSB and account number and validate them", () => {
+  const db = createDatabase(":memory:");
+  const saved = saveAccounts(db, [
+    { institution: "ME Bank", name: "Everyday", bsb: "123456", accountNumber: "12345678", type: "cash", balanceCents: 100 },
+    { institution: "ME Bank", name: "Savings", type: "cash", balanceCents: 200 },
+  ]).filter((account) => !account.isMock);
+  assert.equal(saved.find((account) => account.name === "Everyday")?.bsb, "123-456");
+  assert.equal(saved.find((account) => account.name === "Everyday")?.accountNumber, "12345678");
+  assert.equal(saved.find((account) => account.name === "Savings")?.bsb, "");
+  assert.throws(
+    () => saveAccounts(db, [{ institution: "ME Bank", name: "Bad", bsb: "12-34", type: "cash", balanceCents: 1 }]),
+    /BSB with 6 digits/,
+  );
+  assert.throws(
+    () => saveAccounts(db, [{ institution: "ME Bank", name: "Bad", accountNumber: "12$45", type: "cash", balanceCents: 1 }]),
+    /account number/,
+  );
+  db.close();
+});
+
 test("personal accounts can be deleted without affecting sample accounts", () => {
   const db = createDatabase(":memory:");
   const saved = saveAccounts(db, [

@@ -40,7 +40,9 @@ export function createDatabase(
       type TEXT NOT NULL CHECK (type IN ('cash', 'offset', 'super')),
       balance_cents INTEGER NOT NULL,
       is_mock INTEGER NOT NULL DEFAULT 0 CHECK (is_mock IN (0, 1)),
-      institution TEXT NOT NULL DEFAULT ''
+      institution TEXT NOT NULL DEFAULT '',
+      bsb TEXT NOT NULL DEFAULT '',
+      account_number TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS mortgage (
@@ -146,6 +148,12 @@ function ensureAccountColumns(db: Database.Database): void {
   );
   if (!columns.has("institution")) {
     db.exec("ALTER TABLE financial_account ADD COLUMN institution TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columns.has("bsb")) {
+    db.exec("ALTER TABLE financial_account ADD COLUMN bsb TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columns.has("account_number")) {
+    db.exec("ALTER TABLE financial_account ADD COLUMN account_number TEXT NOT NULL DEFAULT ''");
   }
 }
 
