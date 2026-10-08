@@ -25,6 +25,17 @@ npm.cmd start
 
 Then open `http://127.0.0.1:3001`.
 
+## Windows desktop installer
+
+Install dependencies and create the Windows installer with:
+
+```powershell
+npm.cmd install
+npm.cmd run build:desktop
+```
+
+The installer is written to `release/`. The app stores its database under the current Windows user's application-data folder, independently of where the program is installed. Pushing changes to the default branch also builds a downloadable installer in the GitHub Actions workflow artifacts.
+
 ## Local data and privacy
 
 The SQLite database is created in `data/finance.sqlite` by default and is excluded from Git. Set `FINANCE_DATA_DIR` to choose a different local data directory. The account password is salted and hashed with Node.js `scrypt`; session cookies are HttpOnly, SameSite Strict, and backed by hashed session tokens in SQLite. The server binds to loopback and is not exposed to the local network.

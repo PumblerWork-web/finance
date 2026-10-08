@@ -489,10 +489,12 @@ function issueSession(res: Response): void {
 }
 
 const host = "127.0.0.1";
-app.listen(port, host, () => {
-  console.log(`Finance dashboard API listening on http://${host}:${port}`);
+const server = app.listen(port, host, () => {
+  const address = server.address();
+  const listeningPort = typeof address === "object" && address ? address.port : port;
+  console.log(`Finance dashboard API listening on http://${host}:${listeningPort}`);
   if (isProduction) {
-    console.log("Open http://127.0.0.1:" + port + " in your browser.");
+    console.log("Open http://127.0.0.1:" + listeningPort + " in your browser.");
   }
 });
 
@@ -506,7 +508,7 @@ process.on("SIGTERM", () => {
   process.exit(0);
 });
 
-export { app, db, auth };
+export { app, db, auth, server };
 
 function parseEntry(value: unknown): FinanceEntryInput {
   if (!value || typeof value !== "object") throw new Error("Enter valid entry details.");
