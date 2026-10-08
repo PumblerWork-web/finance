@@ -4,6 +4,7 @@ import { createAuthService } from "./auth";
 import { createDatabase } from "./database";
 import { createEntry } from "./finance";
 import { exportBackup, restoreBackup } from "./dataTransfer";
+import { getLoans, saveLoans } from "./loans";
 
 test("backup restores finance data without replacing the destination account", async () => {
   const source = createDatabase(":memory:");
@@ -14,6 +15,15 @@ test("backup restores finance data without replacing the destination account", a
     description: "Market",
     entryDate: "2026-10-07",
   });
+  saveLoans(source, [{
+    name: "Car finance",
+    lender: "Local lender",
+    type: "car",
+    balanceCents: 1_250_000,
+    interestRateBps: 750,
+    repaymentCents: 45_000,
+    repaymentFrequency: "monthly",
+  }]);
   const backup = exportBackup(source);
   const destination = createDatabase(":memory:", { seedSampleData: false });
   const destinationAuth = createAuthService(destination);
@@ -32,6 +42,31 @@ test("backup restores finance data without replacing the destination account", a
   assert.deepEqual(await destinationAuth.verifyPassword("destination password 123"), { displayName: "New PC" });
   assert.equal(JSON.stringify(backup).includes("app_user"), false);
   assert.equal(JSON.stringify(backup).includes("session"), false);
+  source.close();
+  destination.close();
+});
+
+test("version 1 backups restore without general loans", () => {
+  const source = createDatabase(":memory:");
+  const backup = exportBackup(source);
+  const destination = createDatabase(":memory:");
+  saveLoans(destination, [{
+    name: "Old PC loan",
+    lender: "Local lender",
+    type: "personal",
+    balanceCents: 100_000,
+    interestRateBps: null,
+    repaymentCents: null,
+    repaymentFrequency: "monthly",
+  }]);
+
+  restoreBackup(destination, {
+    ...backup,
+    version: 1,
+    tables: { ...backup.tables, personal_loan: undefined },
+  });
+
+  assert.deepEqual(getLoans(destination), []);
   source.close();
   destination.close();
 });

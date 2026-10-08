@@ -6,6 +6,7 @@ import type {
   FinanceEntryInput,
   FinanceReport,
   FinancialAccount,
+  Loan,
   MortgageSplit,
   PlannerItem,
   PlannerItemInput,
@@ -75,6 +76,9 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ loans }),
     }),
+  loans: () => request<Loan[]>("/api/loans"),
+  saveLoans: (loans: Array<Omit<Loan, "id" | "updatedAt">>) =>
+    request<Loan[]>("/api/loans", { method: "PUT", body: JSON.stringify({ loans }) }),
   entries: (kind: EntryKind) => request<FinanceEntry[]>(`/api/entries?kind=${kind}`),
   createEntry: (entry: FinanceEntryInput) =>
     request<FinanceEntry>("/api/entries", { method: "POST", body: JSON.stringify(entry) }),

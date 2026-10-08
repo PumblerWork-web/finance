@@ -6,6 +6,7 @@ import { exportBackup, restoreBackup } from "./dataTransfer";
 import { getDashboardData } from "./dashboard";
 import { getAccounts, removeAccount, removeSampleAccount, saveAccounts, type FinancialAccountInput } from "./accounts";
 import { getMortgage, saveMortgage, type MortgageSplitInput } from "./mortgage";
+import { getLoans, saveLoans, type LoanInput } from "./loans";
 import { removeSampleData } from "./sampleData";
 import {
   createEntry,
@@ -462,6 +463,29 @@ app.put("/api/mortgage", requireAuth, (req, res, next) => {
   }
 });
 
+app.get("/api/loans", requireAuth, (_req, res) => {
+  res.json(getLoans(db));
+});
+
+app.put("/api/loans", requireAuth, (req, res, next) => {
+  const body = req.body as { loans?: unknown };
+  if (!Array.isArray(body.loans)) {
+    res.status(400).json({ error: "Provide a list of loans." });
+    return;
+  }
+
+  try {
+    const loans = body.loans.map(parseLoan);
+    res.json(saveLoans(db, loans));
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+});
+
 if (isProduction) {
   const webDirectory = path.resolve(currentDirectory, "../../dist");
   app.use(express.static(webDirectory));
@@ -605,5 +629,30 @@ function parsePlannerItem(value: unknown): PlannerItemInput {
     dueDate: item.dueDate,
     recurrence: item.recurrence as Recurrence,
     notes: item.notes,
+  };
+}
+
+function parseLoan(value: unknown): LoanInput {
+  if (!value || typeof value !== "object") throw new Error("Enter valid loan details.");
+  const loan = value as Record<string, unknown>;
+  if (
+    typeof loan.name !== "string" ||
+    typeof loan.lender !== "string" ||
+    typeof loan.type !== "string" ||
+    typeof loan.balanceCents !== "number" ||
+    (loan.interestRateBps !== null && typeof loan.interestRateBps !== "number") ||
+    (loan.repaymentCents !== null && typeof loan.repaymentCents !== "number") ||
+    typeof loan.repaymentFrequency !== "string"
+  ) {
+    throw new Error("Enter valid loan details.");
+  }
+  return {
+    name: loan.name,
+    lender: loan.lender,
+    type: loan.type as LoanInput["type"],
+    balanceCents: loan.balanceCents,
+    interestRateBps: loan.interestRateBps,
+    repaymentCents: loan.repaymentCents,
+    repaymentFrequency: loan.repaymentFrequency as LoanInput["repaymentFrequency"],
   };
 }

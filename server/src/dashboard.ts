@@ -20,6 +20,7 @@ export interface DashboardData {
   offsetCents: number;
   superCents: number;
   mortgageCents: number;
+  otherLoanCents: number;
   monthlyIncomeCents: number;
   monthlySpendingCents: number;
   monthlySurplusCents: number;
@@ -54,6 +55,9 @@ export function getDashboardData(db: Database.Database, now = new Date()): Dashb
       .prepare("SELECT COALESCE(SUM(balance_cents), 0) AS balanceCents FROM mortgage WHERE is_mock = ?")
       .get(Number(mortgageIsMock)) as { balanceCents: number }
   ).balanceCents;
+  const otherLoanCents = (db
+    .prepare("SELECT COALESCE(SUM(balance_cents), 0) AS balanceCents FROM personal_loan")
+    .get() as { balanceCents: number }).balanceCents;
   const personalDataPresent = Boolean(
     (
       db.prepare(`
@@ -61,6 +65,7 @@ export function getDashboardData(db: Database.Database, now = new Date()): Dashb
         FROM (
           SELECT id FROM financial_account WHERE is_mock = 0
           UNION ALL SELECT id FROM mortgage WHERE is_mock = 0
+          UNION ALL SELECT id FROM personal_loan
           UNION ALL SELECT id FROM finance_entry
           UNION ALL SELECT id FROM recurring_income
           UNION ALL SELECT id FROM planner_item
@@ -98,11 +103,12 @@ export function getDashboardData(db: Database.Database, now = new Date()): Dashb
     accountsAreMock,
     updatedAt: now.toISOString(),
     financialYear,
-    netPositionCents: cashCents + offsetCents + superCents - mortgageCents,
+    netPositionCents: cashCents + offsetCents + superCents - mortgageCents - otherLoanCents,
     cashCents: cashCents + offsetCents,
     offsetCents,
     superCents,
     mortgageCents,
+    otherLoanCents,
     monthlyIncomeCents: (monthly?.incomeCents ?? 0) + recurringIncomeForMonth(db, currentMonth),
     monthlySpendingCents: monthly?.spendingCents ?? 0,
     monthlySurplusCents: (monthly?.incomeCents ?? 0) + recurringIncomeForMonth(db, currentMonth) - (monthly?.spendingCents ?? 0),

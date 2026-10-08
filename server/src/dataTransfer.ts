@@ -4,6 +4,7 @@ const backupTables = {
   provider: ["id", "name", "type", "is_mock"],
   financial_account: ["id", "provider_id", "name", "type", "balance_cents", "is_mock", "institution"],
   mortgage: ["id", "name", "balance_cents", "is_mock", "interest_rate_bps", "repayment_cents", "rate_type", "repayment_frequency", "updated_at"],
+  personal_loan: ["id", "name", "lender", "type", "balance_cents", "interest_rate_bps", "repayment_cents", "repayment_frequency", "updated_at"],
   monthly_summary: ["month", "income_cents", "spending_cents", "is_mock"],
   upcoming_item: ["id", "title", "due_date", "amount_cents", "kind", "is_mock"],
   monthly_budget: ["id", "category", "spent_cents", "limit_cents", "is_mock"],
@@ -21,7 +22,7 @@ type BackupTables = Record<TableName, BackupRow[]>;
 
 export interface FinanceBackup {
   format: "finance-dashboard-backup";
-  version: 1;
+  version: 2;
   exportedAt: string;
   tables: BackupTables;
 }
@@ -29,6 +30,7 @@ export interface FinanceBackup {
 const deleteOrder: TableName[] = [
   "financial_account",
   "mortgage",
+  "personal_loan",
   "monthly_summary",
   "upcoming_item",
   "monthly_budget",
@@ -50,20 +52,20 @@ export function exportBackup(db: Database.Database): FinanceBackup {
 
   return {
     format: "finance-dashboard-backup",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     tables,
   };
 }
 
 export function restoreBackup(db: Database.Database, value: unknown): void {
-  if (!isRecord(value) || value.format !== "finance-dashboard-backup" || value.version !== 1 || !isRecord(value.tables)) {
+  if (!isRecord(value) || value.format !== "finance-dashboard-backup" || (value.version !== 1 && value.version !== 2) || !isRecord(value.tables)) {
     throw new Error("This file is not a supported Finance Dashboard backup.");
   }
 
   const tables = value.tables as Record<string, unknown>;
   for (const [table, columns] of Object.entries(backupTables) as Array<[TableName, readonly string[]]>) {
-    const rows = tables[table];
+    const rows = tables[table] ?? (value.version === 1 && table === "personal_loan" ? [] : undefined);
     if (!Array.isArray(rows) || rows.some((row) => !isValidRow(row, columns))) {
       throw new Error("This backup is incomplete or contains invalid data.");
     }
@@ -75,7 +77,8 @@ export function restoreBackup(db: Database.Database, value: unknown): void {
     for (const [table, columns] of Object.entries(backupTables) as Array<[TableName, readonly string[]]>) {
       const placeholders = columns.map(() => "?").join(", ");
       const insert = db.prepare(`INSERT INTO ${table} (${columns.join(", ")}) VALUES (${placeholders})`);
-      for (const row of tables[table] as BackupRow[]) {
+      const rows = tables[table] ?? [];
+      for (const row of rows as BackupRow[]) {
         insert.run(...columns.map((column) => row[column]));
       }
     }

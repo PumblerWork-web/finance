@@ -11,6 +11,7 @@ import {
   Check,
   ChevronDown,
   CircleHelp,
+  Coins,
   CreditCard,
   Download,
   FileChartColumnIncreasing,
@@ -44,6 +45,8 @@ import type {
   FinanceReport,
   FinancialAccount,
   IncomeRecurrence,
+  Loan,
+  LoanType,
   MortgageSplit,
   PlannerItem,
   PlannerItemInput,
@@ -56,6 +59,7 @@ const navigation = [
   { label: "Dashboard", icon: LayoutDashboard, group: "Overview" },
   { label: "Accounts", icon: Wallet, group: "Finances" },
   { label: "Mortgage", icon: House, group: "Finances" },
+  { label: "Loans", icon: Coins, group: "Finances" },
   { label: "Super", icon: PiggyBank, group: "Finances" },
   { label: "Income", icon: Banknote, group: "Finances" },
   { label: "Spending", icon: CreditCard, group: "Planning" },
@@ -243,6 +247,8 @@ export default function App() {
               netPositionCents: current.netPositionCents + current.mortgageCents - mortgageCents,
             } : current);
           }} />
+        ) : activePage === "Loans" ? (
+          <LoansPage onSaved={refreshDashboardData} />
         ) : activePage === "Accounts" || activePage === "Super" ? (
           <AccountsPage
             key={activePage}
@@ -426,10 +432,11 @@ function Dashboard({
         <section className="panel dashboard-empty-state">
           <span className="dashboard-empty-icon"><Wallet size={23} /></span>
           <h2>No financial details added yet</h2>
-          <p>This dashboard is empty. Add your own accounts or mortgage details to see your balances here. Nothing is pre-filled with sample figures.</p>
+          <p>This dashboard is empty. Add your own accounts, mortgage, or other loans to see your balances here. Nothing is pre-filled with sample figures.</p>
           <div className="dashboard-empty-actions">
             <button className="primary-button" onClick={() => onNavigate("Accounts")} type="button">Add accounts <ArrowRight size={15} /></button>
             <button className="secondary-button" onClick={() => onNavigate("Mortgage")} type="button">Add mortgage</button>
+            <button className="secondary-button" onClick={() => onNavigate("Loans")} type="button">Add a loan</button>
           </div>
         </section>
         <div className="data-disclaimer"><CircleHelp size={15} /><span>Sample data has been permanently removed from this device. Your dashboard will show only information you enter.</span></div>
@@ -452,7 +459,7 @@ function Dashboard({
         <div className="net-worth-content">
           <div className="card-eyebrow light-eyebrow"><span className="status-dot" /> NET FINANCIAL POSITION</div>
           <div className="net-worth-amount">{formatMoney(data.netPositionCents)}</div>
-          <p className="net-worth-description">Cash and super, less your home loan</p>
+          <p className="net-worth-description">Cash and super, less recorded loans</p>
           <div className="net-worth-change"><span className="change-pill"><Check size={13} /> {data.sampleDataPresent ? "SAMPLE" : "LOCAL"}</span><span>{data.sampleDataPresent ? "includes fictional sample figures" : data.personalDataPresent ? "your manually entered financial data" : "no sample figures are loaded"}</span></div>
         </div>
         <div className="net-worth-art" aria-hidden="true">
@@ -464,6 +471,7 @@ function Dashboard({
           <span><span className="legend-dot mint" /> Cash &amp; offset <strong>{formatMoney(data.cashCents)}</strong></span>
           <span><span className="legend-dot lavender" /> Super <strong>{formatMoney(data.superCents)}</strong></span>
           <span><span className="legend-dot coral" /> Home loan <strong>{formatMoney(data.mortgageCents)}</strong></span>
+          <span><span className="legend-dot amber" /> Other loans <strong>{formatMoney(data.otherLoanCents)}</strong></span>
         </div>
       </section>
 
@@ -1403,6 +1411,129 @@ function ReportsPage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+interface LoanDraft {
+  name: string;
+  lender: string;
+  type: LoanType;
+  balance: string;
+  interestRate: string;
+  repayment: string;
+  repaymentFrequency: "weekly" | "fortnightly" | "monthly";
+}
+
+function newLoan(index: number): LoanDraft {
+  return {
+    name: `Loan ${index + 1}`,
+    lender: "",
+    type: "personal",
+    balance: "",
+    interestRate: "",
+    repayment: "",
+    repaymentFrequency: "monthly",
+  };
+}
+
+function LoansPage({ onSaved }: { onSaved: () => Promise<void> }) {
+  const [loans, setLoans] = useState<LoanDraft[]>([]);
+  const [savedLoans, setSavedLoans] = useState<Loan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    api.loans()
+      .then((loaded) => {
+        setSavedLoans(loaded);
+        setLoans(loaded.map((loan) => ({
+          name: loan.name,
+          lender: loan.lender,
+          type: loan.type,
+          balance: (loan.balanceCents / 100).toFixed(2),
+          interestRate: loan.interestRateBps === null ? "" : (loan.interestRateBps / 100).toFixed(2),
+          repayment: loan.repaymentCents === null ? "" : (loan.repaymentCents / 100).toFixed(2),
+          repaymentFrequency: loan.repaymentFrequency,
+        })));
+      })
+      .catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : "Unable to load your loans.");
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    setSaving(true);
+    try {
+      const saved = await api.saveLoans(loans.map((loan) => ({
+        name: loan.name,
+        lender: loan.lender,
+        type: loan.type,
+        balanceCents: Math.round(Number(loan.balance) * 100),
+        interestRateBps: loan.interestRate === "" ? null : Math.round(Number(loan.interestRate) * 100),
+        repaymentCents: loan.repayment === "" ? null : Math.round(Number(loan.repayment) * 100),
+        repaymentFrequency: loan.repaymentFrequency,
+      })));
+      setSavedLoans(saved);
+      await onSaved();
+      setMessage("Your loan details have been saved on this device.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to save your loans.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function updateLoan(index: number, update: Partial<LoanDraft>) {
+    setLoans((current) => current.map((loan, loanIndex) => loanIndex === index ? { ...loan, ...update } : loan));
+  }
+
+  return (
+    <div className="secondary-page">
+      <div className="welcome-row">
+        <div>
+          <div className="eyebrow">OTHER HOUSEHOLD LOANS</div>
+          <h1>Loans</h1>
+          <p className="welcome-subtitle">Track personal, car, student, and other loan balances separately from your mortgage.</p>
+        </div>
+      </div>
+      <section className="panel mortgage-panel loans-panel">
+        {loading ? <p className="mortgage-status">Loading saved loans…</p> : loans.length === 0 && savedLoans.length === 0 ? (
+          <div className="loans-empty">
+            <span className="loans-empty-icon"><Coins size={21} /></span>
+            <div><h2>No other loans added</h2><p>Your home loan stays in Mortgage. Add another loan here whenever you need to track it.</p></div>
+            <button className="primary-button" onClick={() => setLoans([newLoan(0)])} type="button">Add a loan <ArrowRight size={15} /></button>
+          </div>
+        ) : (
+          <form className="loans-form" onSubmit={submit}>
+            {loans.length === 0 && <p className="loans-empty-inline">No loans listed. Add one, or save to remove all loans.</p>}
+            {loans.map((loan, index) => (
+              <fieldset className="loan-card" key={index}>
+                <legend>{loan.name || `Loan ${index + 1}`}</legend>
+                <button className="remove-split-button" onClick={() => setLoans((current) => current.filter((_, loanIndex) => loanIndex !== index))} type="button">Remove</button>
+                <label>Loan name<input maxLength={80} onChange={(event) => updateLoan(index, { name: event.target.value })} required value={loan.name} /></label>
+                <label>Lender<input maxLength={80} onChange={(event) => updateLoan(index, { lender: event.target.value })} placeholder="Optional" value={loan.lender} /></label>
+                <label>Loan type<select onChange={(event) => updateLoan(index, { type: event.target.value as LoanType })} value={loan.type}><option value="personal">Personal</option><option value="car">Car</option><option value="student">Student</option><option value="other">Other</option></select></label>
+                <label>Current balance (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" max="100000000" min="0.01" onChange={(event) => updateLoan(index, { balance: event.target.value })} required step="0.01" type="number" value={loan.balance} /></span></label>
+                <label>Interest rate (optional)<span className="suffix-input"><input inputMode="decimal" max="100" min="0" onChange={(event) => updateLoan(index, { interestRate: event.target.value })} placeholder="e.g. 8.50" step="0.01" type="number" value={loan.interestRate} /><span>% p.a.</span></span></label>
+                <label>Repayment (optional)<span className="money-input"><span>$</span><input inputMode="decimal" min="0" onChange={(event) => updateLoan(index, { repayment: event.target.value })} placeholder="e.g. 450" step="0.01" type="number" value={loan.repayment} /></span></label>
+                <label>Repayment frequency<select onChange={(event) => updateLoan(index, { repaymentFrequency: event.target.value as LoanDraft["repaymentFrequency"] })} value={loan.repaymentFrequency}><option value="weekly">Weekly</option><option value="fortnightly">Fortnightly</option><option value="monthly">Monthly</option></select></label>
+              </fieldset>
+            ))}
+            <button className="secondary-button add-split-button" onClick={() => setLoans((current) => [...current, newLoan(current.length)])} type="button">+ Add another loan</button>
+            <div className="mortgage-total"><span>Total other loan balance</span><strong>{formatMoney(loans.reduce((total, loan) => total + (Number(loan.balance) || 0) * 100, 0))}</strong></div>
+            {error && <div className="form-error" role="alert">{error}</div>}
+            {message && <div className="mortgage-success" role="status">{message}</div>}
+            <div className="mortgage-actions"><button className="primary-button" disabled={saving} type="submit">{saving ? "Saving…" : savedLoans.length ? "Update loans" : "Save loans"} <ArrowRight size={15} /></button></div>
+          </form>
+        )}
+      </section>
     </div>
   );
 }

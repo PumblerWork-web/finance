@@ -55,6 +55,18 @@ export function createDatabase(
       updated_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS personal_loan (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      lender TEXT NOT NULL DEFAULT '',
+      type TEXT NOT NULL CHECK (type IN ('personal', 'car', 'student', 'other')),
+      balance_cents INTEGER NOT NULL CHECK (balance_cents > 0),
+      interest_rate_bps INTEGER,
+      repayment_cents INTEGER,
+      repayment_frequency TEXT NOT NULL CHECK (repayment_frequency IN ('weekly', 'fortnightly', 'monthly')),
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS monthly_summary (
       month TEXT PRIMARY KEY,
       income_cents INTEGER NOT NULL,

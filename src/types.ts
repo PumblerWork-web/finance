@@ -16,6 +16,7 @@ export interface DashboardData {
   offsetCents: number;
   superCents: number;
   mortgageCents: number;
+  otherLoanCents: number;
   monthlyIncomeCents: number;
   monthlySpendingCents: number;
   monthlySurplusCents: number;
@@ -48,6 +49,20 @@ export interface MortgageSplit {
   interestRateBps: number | null;
   repaymentCents: number | null;
   rateType: "variable" | "fixed";
+  repaymentFrequency: "weekly" | "fortnightly" | "monthly";
+  updatedAt: string;
+}
+
+export type LoanType = "personal" | "car" | "student" | "other";
+
+export interface Loan {
+  id: number;
+  name: string;
+  lender: string;
+  type: LoanType;
+  balanceCents: number;
+  interestRateBps: number | null;
+  repaymentCents: number | null;
   repaymentFrequency: "weekly" | "fortnightly" | "monthly";
   updatedAt: string;
 }

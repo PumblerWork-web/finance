@@ -5,6 +5,7 @@ import { createDatabase } from "./database";
 import { getDashboardData } from "./dashboard";
 import { getAccounts, removeAccount, saveAccounts } from "./accounts";
 import { getMortgage, saveMortgage } from "./mortgage";
+import { getLoans, saveLoans } from "./loans";
 import { removeSampleData } from "./sampleData";
 import {
   createEntry,
@@ -322,6 +323,43 @@ test("manual mortgage details reject invalid values", () => {
     }]),
     /interest rate between 0 and 100 percent/,
   );
+  db.close();
+});
+
+test("other household loans persist and reduce net position without changing mortgage totals", () => {
+  const db = createDatabase(":memory:", { seedSampleData: false });
+  saveLoans(db, [{
+    name: "Car finance",
+    lender: "Local lender",
+    type: "car",
+    balanceCents: 1_500_000,
+    interestRateBps: 750,
+    repaymentCents: 45_000,
+    repaymentFrequency: "monthly",
+  }]);
+
+  assert.equal(getLoans(db)[0].name, "Car finance");
+  const dashboard = getDashboardData(db, new Date("2026-10-06T00:00:00.000Z"));
+  assert.equal(dashboard.otherLoanCents, 1_500_000);
+  assert.equal(dashboard.mortgageCents, 0);
+  assert.equal(dashboard.netPositionCents, -1_500_000);
+
+  saveLoans(db, []);
+  assert.deepEqual(getLoans(db), []);
+  db.close();
+});
+
+test("other household loans reject invalid balances", () => {
+  const db = createDatabase(":memory:");
+  assert.throws(() => saveLoans(db, [{
+    name: "Invalid loan",
+    lender: "",
+    type: "personal",
+    balanceCents: 0,
+    interestRateBps: null,
+    repaymentCents: null,
+    repaymentFrequency: "monthly",
+  }]), /loan balance greater than \$0/);
   db.close();
 });
 
