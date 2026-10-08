@@ -2,9 +2,24 @@
 
 const path = require("node:path");
 const { app, BrowserWindow, dialog } = require("electron");
+const { autoUpdater } = require("electron-updater");
 
 let backend;
 let mainWindow;
+
+async function promptToRestartForUpdate() {
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: "info",
+    title: "Update ready to install",
+    message: "A Finance Dashboard update has been downloaded.",
+    detail: "Restart the app to install the update.",
+    buttons: ["Restart now", "Later"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+
+  if (response === 0) autoUpdater.quitAndInstall();
+}
 
 async function launch() {
   await app.whenReady();
@@ -45,6 +60,22 @@ async function launch() {
     if (!url.startsWith(`${origin}/`)) event.preventDefault();
   });
   await mainWindow.loadURL(origin);
+
+  if (app.isPackaged) {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on("update-downloaded", () => {
+      void promptToRestartForUpdate().catch((error) => {
+        console.error("Unable to prompt to install the downloaded update:", error);
+      });
+    });
+    autoUpdater.on("error", (error) => {
+      console.error("Unable to check for or download an app update:", error);
+    });
+    void autoUpdater.checkForUpdates().catch((error) => {
+      console.error("Unable to check for app updates:", error);
+    });
+  }
 }
 
 app.on("window-all-closed", () => app.quit());

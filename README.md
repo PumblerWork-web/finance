@@ -36,6 +36,12 @@ npm.cmd run build:desktop
 
 The installer is written to `release/`. The app stores its database under the current Windows user's application-data folder, independently of where the program is installed. Pushing changes to the default branch also builds a downloadable installer in the GitHub Actions workflow artifacts.
 
+### Publishing desktop updates
+
+The installed app checks for updates on launch. When a newer version is available, it downloads the update and asks whether to restart and install it; choosing **Later** installs it the next time the app exits. Updates are distributed through GitHub Releases, which must be publicly accessible to installed copies of the app.
+
+To publish an update, increment the `version` in `package.json`, commit and push the change, then create and push a matching version tag (for example, `v0.2.0`). The Windows desktop workflow builds the installer and publishes it to that GitHub Release. The tag version must match the package version.
+
 ## Local data and privacy
 
 The SQLite database is created in `data/finance.sqlite` by default and is excluded from Git. Set `FINANCE_DATA_DIR` to choose a different local data directory. The account password is salted and hashed with Node.js `scrypt`; session cookies are HttpOnly, SameSite Strict, and backed by hashed session tokens in SQLite. The server binds to loopback and is not exposed to the local network.
