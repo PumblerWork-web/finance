@@ -304,13 +304,24 @@ test("manual mortgage details reject invalid values", () => {
   assert.throws(
     () => saveMortgage(db, [{
       name: "Invalid split",
-      balanceCents: 0,
+      balanceCents: 10_000_000_001,
       interestRateBps: null,
       repaymentCents: null,
       rateType: "variable",
       repaymentFrequency: "monthly",
     }]),
-    /loan balance greater than \$0/,
+    /loan balance between -\$100 million and \$100 million/,
+  );
+  assert.throws(
+    () => saveMortgage(db, [{
+      name: "Invalid split",
+      balanceCents: -10_000_000_001,
+      interestRateBps: null,
+      repaymentCents: null,
+      rateType: "variable",
+      repaymentFrequency: "monthly",
+    }]),
+    /loan balance between -\$100 million and \$100 million/,
   );
   assert.throws(
     () => saveMortgage(db, [{
@@ -323,6 +334,32 @@ test("manual mortgage details reject invalid values", () => {
     }]),
     /interest rate between 0 and 100 percent/,
   );
+  db.close();
+});
+
+test("negative mortgage splits reduce the total loan balance", () => {
+  const db = createDatabase(":memory:");
+  const mortgages = saveMortgage(db, [
+    {
+      name: "Loan balance",
+      balanceCents: 20_000_000,
+      interestRateBps: null,
+      repaymentCents: null,
+      rateType: "variable",
+      repaymentFrequency: "monthly",
+    },
+    {
+      name: "Credit balance",
+      balanceCents: -5_000_000,
+      interestRateBps: null,
+      repaymentCents: null,
+      rateType: "variable",
+      repaymentFrequency: "monthly",
+    },
+  ]);
+
+  assert.equal(mortgages[1].balanceCents, -5_000_000);
+  assert.equal(getDashboardData(db).mortgageCents, 15_000_000);
   db.close();
 });
 

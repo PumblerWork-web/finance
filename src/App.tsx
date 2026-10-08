@@ -1637,7 +1637,7 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
                 </label>
                 <label>
                   Loan balance (AUD)
-                  <span className="money-input"><span>$</span><input inputMode="decimal" max="100000000" min="0.01" onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, balance: event.target.value } : item))} required step="0.01" type="number" value={loan.balance} /></span>
+                  <span className="money-input"><span>$</span><input inputMode="decimal" max="100000000" min="-100000000" onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, balance: event.target.value } : item))} required step="0.01" type="number" value={loan.balance} /></span>
                 </label>
                 <label>
                   Interest rate (optional)

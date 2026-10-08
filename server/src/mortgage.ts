@@ -43,10 +43,9 @@ export function saveMortgage(db: Database.Database, inputs: MortgageSplitInput[]
       }
       if (
         !Number.isSafeInteger(input.balanceCents) ||
-        input.balanceCents <= 0 ||
-        input.balanceCents > 10_000_000_000
+        Math.abs(input.balanceCents) > 10_000_000_000
       ) {
-        throw new Error("Enter a loan balance greater than $0 and no more than $100 million.");
+        throw new Error("Enter a loan balance between -$100 million and $100 million.");
       }
       if (
         input.interestRateBps !== null &&
