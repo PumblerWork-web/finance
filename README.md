@@ -34,7 +34,7 @@ npm.cmd install
 npm.cmd run build:desktop
 ```
 
-The installer is written to `release/`. The app stores its database under the current Windows user's application-data folder, independently of where the program is installed. Pushing changes to the default branch also builds a downloadable installer in the GitHub Actions workflow artifacts.
+The installer is written to `release/`. The desktop build rebuilds SQLite's native module for the bundled Electron runtime before packaging. The app stores its database under the current Windows user's application-data folder, independently of where the program is installed. Pushing changes to the default branch also builds a downloadable installer in the GitHub Actions workflow artifacts.
 
 ### Publishing desktop updates
 
