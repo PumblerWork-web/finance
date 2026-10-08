@@ -14,6 +14,7 @@ import {
   Coins,
   CreditCard,
   Download,
+  ExternalLink,
   FileChartColumnIncreasing,
   FileUp,
   HeartPulse,
@@ -705,6 +706,7 @@ interface AccountDraft {
   accountId?: number;
   institution: string;
   name: string;
+  websiteUrl: string;
   bsb: string;
   accountNumber: string;
   type: AccountType;
@@ -712,7 +714,16 @@ interface AccountDraft {
 }
 
 function newAccountDraft(type: AccountType = "cash"): AccountDraft {
-  return { institution: "", name: "", bsb: "", accountNumber: "", type, balance: "" };
+  return { institution: "", name: "", websiteUrl: "", bsb: "", accountNumber: "", type, balance: "" };
+}
+
+function isSafeWebsiteUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password;
+  } catch {
+    return false;
+  }
 }
 
 function AccountsPage({
@@ -744,6 +755,7 @@ function AccountsPage({
           accountId: account.id,
           institution: account.institution,
           name: account.name,
+          websiteUrl: account.websiteUrl,
           bsb: account.bsb,
           accountNumber: account.accountNumber,
           type: account.type,
@@ -765,8 +777,9 @@ function AccountsPage({
       const editedAccounts = drafts.map((account) => ({
         institution: account.institution,
         name: account.name,
-        bsb: account.bsb,
-        accountNumber: account.accountNumber,
+        websiteUrl: account.type === "super" ? account.websiteUrl : "",
+        bsb: account.type === "super" ? "" : account.bsb,
+        accountNumber: account.type === "super" ? "" : account.accountNumber,
         type: account.type,
         balanceCents: Math.round(Number(account.balance) * 100),
       }));
@@ -774,9 +787,10 @@ function AccountsPage({
         ? []
         : accounts
           .filter((account) => !account.isMock && account.type !== accountType)
-          .map(({ institution, name, bsb, accountNumber, type, balanceCents }) => ({
+          .map(({ institution, name, websiteUrl, bsb, accountNumber, type, balanceCents }) => ({
             institution,
             name,
+            websiteUrl,
             bsb,
             accountNumber,
             type,
@@ -885,7 +899,10 @@ function AccountsPage({
               <div className="account-card-info">
                 <strong>{account.name}</strong>
                 <span>{account.institution || "Sample institution"} · {accountTypeLabel(account.type)}</span>
-                {(account.bsb || account.accountNumber) && (
+                {account.type === "super" && account.websiteUrl && isSafeWebsiteUrl(account.websiteUrl) && (
+                  <a className="account-website-link" href={account.websiteUrl} rel="noreferrer" target="_blank">Fund website <ExternalLink size={12} /></a>
+                )}
+                {account.type !== "super" && (account.bsb || account.accountNumber) && (
                   <span>{[account.bsb && `BSB ${account.bsb}`, account.accountNumber && `Acc ${account.accountNumber}`].filter(Boolean).join(" · ")}</span>
                 )}
               </div>
@@ -907,21 +924,30 @@ function AccountsPage({
               <legend>{accountType === "super" ? `Super account ${index + 1}` : `Account ${index + 1}`}</legend>
               <button className="remove-split-button" onClick={() => setDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button">Remove</button>
               <label>
-                Bank or institution
-                <input autoComplete="organization" maxLength={80} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, institution: event.target.value } : item))} placeholder="e.g. ME Bank" required value={account.institution} />
+                {account.type === "super" ? "Super fund" : "Bank or institution"}
+                <input autoComplete="organization" maxLength={80} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, institution: event.target.value } : item))} placeholder={account.type === "super" ? "e.g. AustralianSuper" : "e.g. ME Bank"} required value={account.institution} />
               </label>
               <label>
                 Account name
                 <input maxLength={80} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} placeholder="e.g. Everyday account" required value={account.name} />
               </label>
-              <label>
-                BSB (optional)
-                <input autoComplete="off" inputMode="numeric" maxLength={7} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, bsb: event.target.value } : item))} pattern="\d{3}-?\d{3}" placeholder="e.g. 123-456" title="6 digits, for example 123-456" value={account.bsb} />
-              </label>
-              <label>
-                Account number (optional)
-                <input autoComplete="off" maxLength={20} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, accountNumber: event.target.value } : item))} placeholder="e.g. 12345678" value={account.accountNumber} />
-              </label>
+              {account.type === "super" ? (
+                <label>
+                  Fund website (optional)
+                  <input autoComplete="url" maxLength={2048} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, websiteUrl: event.target.value } : item))} placeholder="https://www.example.com.au" type="url" value={account.websiteUrl} />
+                </label>
+              ) : (
+                <>
+                  <label>
+                    BSB (optional)
+                    <input autoComplete="off" inputMode="numeric" maxLength={7} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, bsb: event.target.value } : item))} pattern="\d{3}-?\d{3}" placeholder="e.g. 123-456" title="6 digits, for example 123-456" value={account.bsb} />
+                  </label>
+                  <label>
+                    Account number (optional)
+                    <input autoComplete="off" maxLength={20} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, accountNumber: event.target.value } : item))} placeholder="e.g. 12345678" value={account.accountNumber} />
+                  </label>
+                </>
+              )}
               <label>
                 Account type
                 <select onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, type: event.target.value as AccountType } : item))} value={account.type}>

@@ -6,6 +6,7 @@ export interface FinancialAccount {
   id: number;
   institution: string;
   name: string;
+  websiteUrl: string;
   bsb: string;
   accountNumber: string;
   type: AccountType;
@@ -16,6 +17,7 @@ export interface FinancialAccount {
 export interface FinancialAccountInput {
   institution: string;
   name: string;
+  websiteUrl?: string;
   bsb?: string;
   accountNumber?: string;
   type: AccountType;
@@ -40,12 +42,29 @@ function normaliseAccountNumber(value: unknown): string {
   return text;
 }
 
+function normaliseWebsiteUrl(value: unknown): string {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string" || value.trim().length > 2048) {
+    throw new Error("Enter a valid fund website URL using http or https.");
+  }
+  try {
+    const url = new URL(value.trim());
+    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password) {
+      throw new Error();
+    }
+    return url.toString();
+  } catch {
+    throw new Error("Enter a valid fund website URL using http or https.");
+  }
+}
+
 export function getAccounts(db: Database.Database): FinancialAccount[] {
   return db
     .prepare(
       `SELECT financial_account.id,
               COALESCE(NULLIF(financial_account.institution, ''), provider.name, 'Sample institution') AS institution,
-              financial_account.name, financial_account.bsb, financial_account.account_number AS accountNumber,
+              financial_account.name, financial_account.website_url AS websiteUrl,
+              financial_account.bsb, financial_account.account_number AS accountNumber,
               financial_account.type,
               financial_account.balance_cents AS balanceCents,
               financial_account.is_mock AS isMock
@@ -76,8 +95,11 @@ export function saveAccounts(db: Database.Database, accounts: FinancialAccountIn
     if (typeof account.name !== "string" || !account.name.trim() || account.name.trim().length > 80) {
       throw new Error("Enter an account name of up to 80 characters.");
     }
-    normaliseBsb(account.bsb);
-    normaliseAccountNumber(account.accountNumber);
+    if (account.type !== "super") {
+      normaliseBsb(account.bsb);
+      normaliseAccountNumber(account.accountNumber);
+    }
+    normaliseWebsiteUrl(account.websiteUrl);
     if (!["cash", "offset", "super"].includes(account.type)) {
       throw new Error("Choose cash, offset, or super for each account.");
     }
@@ -92,15 +114,16 @@ export function saveAccounts(db: Database.Database, accounts: FinancialAccountIn
   const save = db.transaction(() => {
     db.prepare("DELETE FROM financial_account WHERE is_mock = 0").run();
     const insert = db.prepare(
-      `INSERT INTO financial_account (institution, name, bsb, account_number, type, balance_cents, is_mock)
-       VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      `INSERT INTO financial_account (institution, name, website_url, bsb, account_number, type, balance_cents, is_mock)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
     );
     for (const account of accounts) {
       insert.run(
         account.institution.trim(),
         account.name.trim(),
-        normaliseBsb(account.bsb),
-        normaliseAccountNumber(account.accountNumber),
+        normaliseWebsiteUrl(account.type === "super" ? account.websiteUrl : ""),
+        account.type === "super" ? "" : normaliseBsb(account.bsb),
+        account.type === "super" ? "" : normaliseAccountNumber(account.accountNumber),
         account.type,
         account.balanceCents,
       );

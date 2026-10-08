@@ -2,7 +2,7 @@ import type Database from "better-sqlite3";
 
 const backupTables = {
   provider: ["id", "name", "type", "is_mock"],
-  financial_account: ["id", "provider_id", "name", "type", "balance_cents", "is_mock", "institution", "bsb", "account_number"],
+  financial_account: ["id", "provider_id", "name", "type", "balance_cents", "is_mock", "institution", "bsb", "account_number", "website_url"],
   mortgage: ["id", "name", "balance_cents", "is_mock", "interest_rate_bps", "repayment_cents", "rate_type", "repayment_frequency", "updated_at"],
   personal_loan: ["id", "name", "lender", "type", "balance_cents", "interest_rate_bps", "repayment_cents", "repayment_frequency", "updated_at"],
   monthly_summary: ["month", "income_cents", "spending_cents", "is_mock"],
@@ -68,7 +68,7 @@ export function restoreBackup(db: Database.Database, value: unknown): void {
     const rows = tables[table] ?? (value.version === 1 && table === "personal_loan" ? [] : undefined);
     if (table === "financial_account" && Array.isArray(rows)) {
       tables[table] = rows.map((row) =>
-        isRecord(row) ? { bsb: "", account_number: "", ...row } : row,
+        isRecord(row) ? { bsb: "", account_number: "", website_url: "", ...row } : row,
       );
     }
     const checkedRows = tables[table] ?? rows;

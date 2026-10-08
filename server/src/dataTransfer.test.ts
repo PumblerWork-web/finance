@@ -49,6 +49,7 @@ test("backup restores finance data without replacing the destination account", a
 test("version 1 backups restore without general loans", () => {
   const source = createDatabase(":memory:");
   const backup = exportBackup(source);
+  for (const account of backup.tables.financial_account) delete account.website_url;
   const destination = createDatabase(":memory:");
   saveLoans(destination, [{
     name: "Old PC loan",

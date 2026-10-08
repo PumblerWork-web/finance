@@ -1,7 +1,7 @@
 "use strict";
 
 const path = require("node:path");
-const { app, BrowserWindow, dialog } = require("electron");
+const { app, BrowserWindow, dialog, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 
 let backend;
@@ -55,7 +55,10 @@ async function launch() {
       sandbox: true,
     },
   });
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https://") || url.startsWith("http://")) void shell.openExternal(url);
+    return { action: "deny" };
+  });
   mainWindow.webContents.on("will-navigate", (event, url) => {
     if (!url.startsWith(`${origin}/`)) event.preventDefault();
   });

@@ -393,6 +393,7 @@ app.put("/api/accounts", requireAuth, (req, res, next) => {
       if (
         typeof account.institution !== "string" ||
         typeof account.name !== "string" ||
+        (account.websiteUrl !== undefined && typeof account.websiteUrl !== "string") ||
         (account.bsb !== undefined && typeof account.bsb !== "string") ||
         (account.accountNumber !== undefined && typeof account.accountNumber !== "string") ||
         typeof account.balanceCents !== "number" ||
@@ -403,6 +404,7 @@ app.put("/api/accounts", requireAuth, (req, res, next) => {
       return {
         institution: account.institution,
         name: account.name,
+        websiteUrl: account.websiteUrl as string | undefined,
         bsb: account.bsb as string | undefined,
         accountNumber: account.accountNumber as string | undefined,
         balanceCents: account.balanceCents,

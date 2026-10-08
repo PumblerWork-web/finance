@@ -42,7 +42,8 @@ export function createDatabase(
       is_mock INTEGER NOT NULL DEFAULT 0 CHECK (is_mock IN (0, 1)),
       institution TEXT NOT NULL DEFAULT '',
       bsb TEXT NOT NULL DEFAULT '',
-      account_number TEXT NOT NULL DEFAULT ''
+      account_number TEXT NOT NULL DEFAULT '',
+      website_url TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS mortgage (
@@ -154,6 +155,9 @@ function ensureAccountColumns(db: Database.Database): void {
   }
   if (!columns.has("account_number")) {
     db.exec("ALTER TABLE financial_account ADD COLUMN account_number TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columns.has("website_url")) {
+    db.exec("ALTER TABLE financial_account ADD COLUMN website_url TEXT NOT NULL DEFAULT ''");
   }
 }
 

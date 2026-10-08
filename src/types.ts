@@ -37,6 +37,7 @@ export interface FinancialAccount {
   id: number;
   institution: string;
   name: string;
+  websiteUrl: string;
   bsb: string;
   accountNumber: string;
   type: AccountType;

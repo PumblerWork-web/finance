@@ -245,10 +245,14 @@ test("accounts store BSB and account number and validate them", () => {
   const saved = saveAccounts(db, [
     { institution: "ME Bank", name: "Everyday", bsb: "123456", accountNumber: "12345678", type: "cash", balanceCents: 100 },
     { institution: "ME Bank", name: "Savings", type: "cash", balanceCents: 200 },
+    { institution: "AustralianSuper", name: "Balanced", websiteUrl: "https://www.australiansuper.com", bsb: "123456", accountNumber: "12345678", type: "super", balanceCents: 300 },
   ]).filter((account) => !account.isMock);
   assert.equal(saved.find((account) => account.name === "Everyday")?.bsb, "123-456");
   assert.equal(saved.find((account) => account.name === "Everyday")?.accountNumber, "12345678");
   assert.equal(saved.find((account) => account.name === "Savings")?.bsb, "");
+  assert.equal(saved.find((account) => account.name === "Balanced")?.websiteUrl, "https://www.australiansuper.com/");
+  assert.equal(saved.find((account) => account.name === "Balanced")?.bsb, "");
+  assert.equal(saved.find((account) => account.name === "Balanced")?.accountNumber, "");
   assert.throws(
     () => saveAccounts(db, [{ institution: "ME Bank", name: "Bad", bsb: "12-34", type: "cash", balanceCents: 1 }]),
     /BSB with 6 digits/,
@@ -256,6 +260,10 @@ test("accounts store BSB and account number and validate them", () => {
   assert.throws(
     () => saveAccounts(db, [{ institution: "ME Bank", name: "Bad", accountNumber: "12$45", type: "cash", balanceCents: 1 }]),
     /account number/,
+  );
+  assert.throws(
+    () => saveAccounts(db, [{ institution: "Bad fund", name: "Bad", websiteUrl: "javascript:alert(1)", type: "super", balanceCents: 1 }]),
+    /website URL using http or https/,
   );
   db.close();
 });
