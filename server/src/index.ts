@@ -2,6 +2,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import path from "node:path";
 import { createAuthService } from "./auth";
 import { createDatabase } from "./database";
+import { exportBackup, restoreBackup } from "./dataTransfer";
 import { getDashboardData } from "./dashboard";
 import { getAccounts, removeAccount, removeSampleAccount, saveAccounts, type FinancialAccountInput } from "./accounts";
 import { getMortgage, saveMortgage, type MortgageSplitInput } from "./mortgage";
@@ -44,7 +45,7 @@ const cookieName = "finance_session";
 const loginAttempts = new Map<string, { failures: number; blockedUntil: number }>();
 
 app.disable("x-powered-by");
-app.use(express.json({ limit: "64kb" }));
+app.use(express.json({ limit: "25mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -128,6 +129,27 @@ app.post("/api/auth/logout", (req, res) => {
 
 app.get("/api/dashboard", requireAuth, (_req, res) => {
   res.json(getDashboardData(db));
+});
+
+app.get("/api/backup", requireAuth, (_req, res) => {
+  const date = new Date().toISOString().slice(0, 10);
+  res.set({
+    "Cache-Control": "no-store",
+    "Content-Disposition": `attachment; filename="finance-dashboard-backup-${date}.json"`,
+    "Content-Type": "application/json; charset=utf-8",
+  });
+  res.send(JSON.stringify(exportBackup(db), null, 2));
+});
+
+app.post("/api/backup/restore", requireAuth, (req, res) => {
+  try {
+    restoreBackup(db, req.body);
+    res.json(getDashboardData(db));
+  } catch (error) {
+    res.status(400).json({
+      error: error instanceof Error ? error.message : "This backup could not be restored.",
+    });
+  }
 });
 
 app.delete("/api/sample-data", requireAuth, (_req, res) => {

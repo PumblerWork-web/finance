@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -12,7 +12,9 @@ import {
   ChevronDown,
   CircleHelp,
   CreditCard,
+  Download,
   FileChartColumnIncreasing,
+  FileUp,
   HeartPulse,
   House,
   LayoutDashboard,
@@ -290,6 +292,7 @@ export default function App() {
           <SettingsPage
             displayName={auth.displayName ?? ""}
             onLogout={handleLogout}
+            onRestored={setData}
           />
           ) : (
             <ComingSoonPage page={activePage} onDashboard={() => setActivePage("Dashboard")} />
@@ -608,10 +611,56 @@ function ChartTooltip({
 function SettingsPage({
   displayName,
   onLogout,
+  onRestored,
 }: {
   displayName: string;
   onLogout: () => Promise<void>;
+  onRestored: (data: DashboardData) => void;
 }) {
+  const backupInput = useRef<HTMLInputElement>(null);
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [transferMessage, setTransferMessage] = useState("");
+  const [transferError, setTransferError] = useState("");
+
+  async function downloadBackup() {
+    setTransferBusy(true);
+    setTransferMessage("");
+    setTransferError("");
+    try {
+      const backup = await api.downloadBackup();
+      const url = URL.createObjectURL(backup);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `finance-dashboard-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setTransferMessage("Backup downloaded.");
+    } catch (reason) {
+      setTransferError(reason instanceof Error ? reason.message : "The backup could not be downloaded.");
+    } finally {
+      setTransferBusy(false);
+    }
+  }
+
+  async function restoreBackup(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file || !window.confirm("Restore this backup? It will replace all finance data on this PC. Your local login will stay unchanged.")) return;
+
+    setTransferBusy(true);
+    setTransferMessage("");
+    setTransferError("");
+    try {
+      const backup = JSON.parse(await file.text()) as unknown;
+      onRestored(await api.restoreBackup(backup));
+      setTransferMessage("Backup restored.");
+    } catch (reason) {
+      setTransferError(reason instanceof Error ? reason.message : "The backup could not be restored.");
+    } finally {
+      setTransferBusy(false);
+    }
+  }
+
   return (
     <div className="secondary-page">
       <div className="welcome-row"><div><div className="eyebrow">PERSONALISE YOUR SPACE</div><h1>Settings</h1><p className="welcome-subtitle">Your dashboard preferences and local security.</p></div></div>
@@ -623,6 +672,16 @@ function SettingsPage({
         <div className="security-status"><span><LockKeyhole size={17} /></span><div><strong>Password protection is on</strong><small>Your password is securely hashed and never stored as plain text.</small></div><span className="enabled-pill"><Check size={13} /> Enabled</span></div>
         <div className="security-status"><span><House size={17} /></span><div><strong>Local-only connection</strong><small>The app listens on this computer and is not exposed to your network.</small></div><span className="enabled-pill"><Check size={13} /> Private</span></div>
         <div className="settings-divider" />
+        <div className="settings-section-title"><div className="settings-section-icon"><Download size={18} /></div><div><h2>Data portability</h2><p>Move your household data to another computer.</p></div></div>
+        <div className="settings-transfer-actions">
+          <button className="primary-button" disabled={transferBusy} onClick={downloadBackup}><Download size={15} /> Download backup</button>
+          <button className="secondary-button" disabled={transferBusy} onClick={() => backupInput.current?.click()}><FileUp size={15} /> Restore backup</button>
+          <input ref={backupInput} hidden type="file" accept=".json,application/json" onChange={restoreBackup} />
+        </div>
+        <p className="settings-transfer-note">On the other computer, sign in or create a local account, then restore the downloaded file. It contains sensitive financial information; keep it private.</p>
+        {transferMessage && <p className="settings-transfer-message" role="status">{transferMessage}</p>}
+        {transferError && <p className="settings-transfer-error" role="alert">{transferError}</p>}
+        <div className="settings-divider" />
         <div className="settings-section-title"><div className="settings-section-icon"><HeartPulse size={18} /></div><div><h2>Financial year</h2><p>Australian financial year runs from 1 July to 30 June.</p></div></div>
         <div className="settings-readonly"><span>Financial year</span><strong>Australian (July – June)</strong></div>
         <div className="settings-actions">
@@ -630,7 +689,6 @@ function SettingsPage({
           <span className="settings-readonly-note">More profile options are coming in a later phase.</span>
         </div>
       </section>
-      <div className="settings-next"><span><Settings size={17} /></span><div><strong>More settings are coming soon</strong><p>Provider connections, imports, backups and retirement assumptions will be added in later phases.</p></div></div>
     </div>
   );
 }

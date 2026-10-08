@@ -45,6 +45,19 @@ export const api = {
     }),
   logout: () => request<void>("/api/auth/logout", { method: "POST" }),
   dashboard: () => request<DashboardData>("/api/dashboard"),
+  downloadBackup: async () => {
+    const response = await fetch("/api/backup");
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? "The backup could not be downloaded.");
+    }
+    return response.blob();
+  },
+  restoreBackup: (backup: unknown) =>
+    request<DashboardData>("/api/backup/restore", {
+      method: "POST",
+      body: JSON.stringify(backup),
+    }),
   removeSampleData: () => request<DashboardData>("/api/sample-data", { method: "DELETE" }),
   accounts: () => request<FinancialAccount[]>("/api/accounts"),
   removeAccount: (id: number) =>
