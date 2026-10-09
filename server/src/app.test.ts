@@ -181,6 +181,33 @@ test("selected budget sources add monthly committed costs by payment frequency",
   db.close();
 });
 
+test("budget spending windows follow weekly, fortnightly, and monthly cadence", () => {
+  const db = createDatabase(":memory:");
+  const entries = [
+    ["2026-10-01", 1000],
+    ["2026-10-04", 2000],
+    ["2026-10-05", 3000],
+    ["2026-10-11", 4000],
+    ["2026-10-12", 5000],
+  ] as const;
+  for (const category of ["Groceries weekly", "Groceries fortnightly", "Groceries monthly"]) {
+    for (const [entryDate, amountCents] of entries) {
+      createEntry(db, { kind: "spending", amountCents, category, description: "", entryDate });
+    }
+  }
+  saveBudgets(db, [
+    { category: "Groceries weekly", limitCents: 10_000, frequency: "weekly" },
+    { category: "Groceries fortnightly", limitCents: 20_000, frequency: "fortnightly" },
+    { category: "Groceries monthly", limitCents: 30_000, frequency: "monthly" },
+  ]);
+
+  const budgets = listBudgets(db, new Date("2026-10-07T12:00:00.000Z"));
+  assert.equal(budgets.find((budget) => budget.frequency === "weekly")?.spentCents, 7_000);
+  assert.equal(budgets.find((budget) => budget.frequency === "fortnightly")?.spentCents, 10_000);
+  assert.equal(budgets.find((budget) => budget.frequency === "monthly")?.spentCents, 15_000);
+  db.close();
+});
+
 test("recurring income is scheduled, editable, and included in dashboard and report expectations", () => {
   const db = createDatabase(":memory:");
   const salary = createRecurringIncome(db, {

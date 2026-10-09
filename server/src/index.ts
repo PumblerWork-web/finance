@@ -266,7 +266,7 @@ app.delete("/api/entries/:id", requireAuth, (req, res) => {
 });
 
 app.get("/api/budgets", requireAuth, (_req, res) => {
-  res.json(listBudgets(db, new Date().toISOString().slice(0, 7)));
+  res.json(listBudgets(db, new Date()));
 });
 
 app.put("/api/budgets", requireAuth, (req, res, next) => {
@@ -593,6 +593,7 @@ function parseBudget(value: unknown): BudgetInput {
   if (
     typeof budget.category !== "string" ||
     typeof budget.limitCents !== "number" ||
+    (budget.frequency !== undefined && typeof budget.frequency !== "string") ||
     (budget.sourceType !== undefined && typeof budget.sourceType !== "string") ||
     (budget.sourceId !== undefined && budget.sourceId !== null && typeof budget.sourceId !== "number")
   ) {
@@ -601,6 +602,7 @@ function parseBudget(value: unknown): BudgetInput {
   return {
     category: budget.category,
     limitCents: budget.limitCents,
+    frequency: budget.frequency as BudgetInput["frequency"],
     sourceType: budget.sourceType as BudgetInput["sourceType"],
     sourceId: budget.sourceId as number | null | undefined,
   };

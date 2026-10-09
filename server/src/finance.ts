@@ -39,16 +39,19 @@ export interface BudgetPlan {
   category: string;
   limitCents: number;
   spentCents: number;
+  frequency: BudgetFrequency;
   sourceType: BudgetSourceType;
   sourceId: number | null;
   committedCents: number;
 }
 
 export type BudgetSourceType = "mortgage" | "loan" | "bill" | "insurance" | "other";
+export type BudgetFrequency = "weekly" | "fortnightly" | "monthly";
 
 export interface BudgetInput {
   category: string;
   limitCents: number;
+  frequency?: BudgetFrequency;
   sourceType?: BudgetSourceType;
   sourceId?: number | null;
 }
@@ -262,25 +265,29 @@ function validateEntry(input: FinanceEntryInput): void {
   validateDate(input.entryDate, "entry");
 }
 
-export function listBudgets(db: Database.Database, month: string): BudgetPlan[] {
+export function listBudgets(db: Database.Database, period: string | Date = new Date()): BudgetPlan[] {
+  const referenceDate = typeof period === "string"
+    ? new Date(`${period.slice(0, 7)}-01T12:00:00.000Z`)
+    : period;
   const budgets = db.prepare(
-    `SELECT b.id, b.category, b.limit_cents AS limitCents,
-            COALESCE(SUM(e.amount_cents), 0) AS spentCents,
+    `SELECT b.id, b.category, b.limit_cents AS limitCents, b.frequency,
             b.source_type AS sourceType, b.source_id AS sourceId
      FROM budget_plan b
-     LEFT JOIN finance_entry e
-       ON e.kind = 'spending' AND lower(e.category) = lower(b.category) AND substr(e.entry_date, 1, 7) = ?
-     GROUP BY b.id, b.category, b.limit_cents
      ORDER BY b.category COLLATE NOCASE`,
-  ).all(month) as Omit<BudgetPlan, "committedCents">[];
-  return budgets.map((budget) => ({
-    ...budget,
-    committedCents: Math.max(
-      0,
-      getBudgetSourceMonthlyCost(db, budget.sourceType, budget.sourceId, month) -
-        (budget.sourceType === "other" ? 0 : budget.spentCents),
-    ),
-  }));
+  ).all() as Array<Omit<BudgetPlan, "spentCents" | "committedCents">>;
+  return budgets.map((budget) => {
+    const { start, end } = getBudgetPeriod(referenceDate, budget.frequency);
+    const spentCents = (db.prepare(
+      `SELECT COALESCE(SUM(amount_cents), 0) AS spentCents FROM finance_entry
+       WHERE kind = 'spending' AND lower(category) = lower(?) AND entry_date >= ? AND entry_date < ?`,
+    ).get(budget.category, start, end) as { spentCents: number }).spentCents;
+    const sourceCost = getBudgetSourcePeriodCost(db, budget.sourceType, budget.sourceId, budget.frequency, start, end);
+    return {
+      ...budget,
+      spentCents,
+      committedCents: Math.max(0, sourceCost - (budget.sourceType === "other" ? 0 : spentCents)),
+    };
+  });
 }
 
 export function saveBudgets(db: Database.Database, budgets: BudgetInput[]): BudgetPlan[] {
@@ -296,6 +303,10 @@ export function saveBudgets(db: Database.Database, budgets: BudgetInput[]): Budg
     seen.add(key);
     const sourceType = budget.sourceType ?? "other";
     const sourceId = budget.sourceId ?? null;
+    const frequency = budget.frequency ?? "monthly";
+    if (!( ["weekly", "fortnightly", "monthly"] as string[]).includes(frequency)) {
+      throw new Error("Choose a weekly, fortnightly, or monthly budget period.");
+    }
     if (!( ["mortgage", "loan", "bill", "insurance", "other"] as string[]).includes(sourceType)) {
       throw new Error("Choose a valid budget type.");
     }
@@ -319,19 +330,21 @@ export function saveBudgets(db: Database.Database, budgets: BudgetInput[]): Budg
   }
   const save = db.transaction(() => {
     db.prepare("DELETE FROM budget_plan").run();
-    const insert = db.prepare("INSERT INTO budget_plan (category, limit_cents, source_type, source_id) VALUES (?, ?, ?, ?)");
-    budgets.forEach(({ category, limitCents, sourceType = "other", sourceId = null }) =>
-      insert.run(category.trim(), limitCents, sourceType, sourceId));
+    const insert = db.prepare("INSERT INTO budget_plan (category, limit_cents, frequency, source_type, source_id) VALUES (?, ?, ?, ?, ?)");
+    budgets.forEach(({ category, limitCents, frequency = "monthly", sourceType = "other", sourceId = null }) =>
+      insert.run(category.trim(), limitCents, frequency, sourceType, sourceId));
   });
   save();
-  return listBudgets(db, new Date().toISOString().slice(0, 7));
+  return listBudgets(db, new Date());
 }
 
-function getBudgetSourceMonthlyCost(
+function getBudgetSourcePeriodCost(
   db: Database.Database,
   sourceType: BudgetSourceType,
   sourceId: number | null,
-  month: string,
+  frequency: BudgetFrequency,
+  start: string,
+  end: string,
 ): number {
   if (!sourceId || sourceType === "other") return 0;
   if (sourceType === "mortgage" || sourceType === "loan") {
@@ -341,9 +354,7 @@ function getBudgetSourceMonthlyCost(
        FROM ${table} WHERE id = ? ${sourceType === "mortgage" ? "AND is_mock = 0" : ""}`,
     ).get(sourceId) as { amountCents: number | null; frequency: string } | undefined;
     if (!row?.amountCents) return 0;
-    if (row.frequency === "weekly") return Math.round(row.amountCents * 52 / 12);
-    if (row.frequency === "fortnightly") return Math.round(row.amountCents * 26 / 12);
-    return row.amountCents;
+    return convertRecurringCost(row.amountCents, row.frequency as BudgetFrequency, frequency);
   }
 
   const row = db.prepare(
@@ -351,12 +362,43 @@ function getBudgetSourceMonthlyCost(
      FROM planner_item WHERE id = ? AND kind = ?`,
   ).get(sourceId, sourceType) as { amountCents: number; dueDate: string; recurrence: Recurrence } | undefined;
   if (!row) return 0;
-  if (row.recurrence === "none") return row.dueDate.slice(0, 7) === month ? row.amountCents : 0;
-  if (row.recurrence === "weekly") return Math.round(row.amountCents * 52 / 12);
-  if (row.recurrence === "fortnightly") return Math.round(row.amountCents * 26 / 12);
-  if (row.recurrence === "quarterly") return Math.round(row.amountCents / 3);
-  if (row.recurrence === "yearly") return Math.round(row.amountCents / 12);
-  return row.amountCents;
+  if (row.recurrence === "none") return row.dueDate >= start && row.dueDate < end ? row.amountCents : 0;
+  const periodsPerYear: Record<Exclude<Recurrence, "none">, number> = {
+    weekly: 52,
+    fortnightly: 26,
+    monthly: 12,
+    quarterly: 4,
+    yearly: 1,
+  };
+  return Math.round(row.amountCents * periodsPerYear[row.recurrence] / budgetPeriodsPerYear(frequency));
+}
+
+function convertRecurringCost(amountCents: number, sourceFrequency: BudgetFrequency, budgetFrequency: BudgetFrequency): number {
+  return Math.round(amountCents * budgetPeriodsPerYear(sourceFrequency) / budgetPeriodsPerYear(budgetFrequency));
+}
+
+function budgetPeriodsPerYear(frequency: BudgetFrequency): number {
+  return frequency === "weekly" ? 52 : frequency === "fortnightly" ? 26 : 12;
+}
+
+function getBudgetPeriod(date: Date, frequency: BudgetFrequency): { start: string; end: string } {
+  const startDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  if (frequency === "monthly") {
+    startDate.setUTCDate(1);
+  } else {
+    const mondayOffset = (startDate.getUTCDay() + 6) % 7;
+    startDate.setUTCDate(startDate.getUTCDate() - mondayOffset);
+    if (frequency === "fortnightly") {
+      const anchor = Date.UTC(1970, 0, 5);
+      const elapsedWeeks = Math.floor((startDate.getTime() - anchor) / (7 * 24 * 60 * 60 * 1000));
+      if (elapsedWeeks % 2 !== 0) startDate.setUTCDate(startDate.getUTCDate() - 7);
+    }
+  }
+  const endDate = new Date(startDate);
+  if (frequency === "weekly") endDate.setUTCDate(endDate.getUTCDate() + 7);
+  else if (frequency === "fortnightly") endDate.setUTCDate(endDate.getUTCDate() + 14);
+  else endDate.setUTCMonth(endDate.getUTCMonth() + 1);
+  return { start: startDate.toISOString().slice(0, 10), end: endDate.toISOString().slice(0, 10) };
 }
 
 export function listPlannerItems(

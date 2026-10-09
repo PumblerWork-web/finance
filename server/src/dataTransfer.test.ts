@@ -61,6 +61,7 @@ test("version 1 backups restore without general loans", () => {
     delete item.insured_value_cents;
   }
   for (const budget of backup.tables.budget_plan) {
+    delete budget.frequency;
     delete budget.source_type;
     delete budget.source_id;
   }
@@ -83,6 +84,7 @@ test("version 1 backups restore without general loans", () => {
 
   assert.deepEqual(getLoans(destination), []);
   assert.equal(listBudgets(destination, new Date().toISOString().slice(0, 7))[0].sourceType, "other");
+  assert.equal(listBudgets(destination, new Date().toISOString().slice(0, 7))[0].frequency, "monthly");
   source.close();
   destination.close();
 });

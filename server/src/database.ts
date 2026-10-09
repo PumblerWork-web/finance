@@ -118,6 +118,7 @@ export function createDatabase(
       id INTEGER PRIMARY KEY,
       category TEXT NOT NULL UNIQUE,
       limit_cents INTEGER NOT NULL CHECK (limit_cents > 0),
+      frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (frequency IN ('weekly', 'fortnightly', 'monthly')),
       source_type TEXT NOT NULL DEFAULT 'other' CHECK (source_type IN ('mortgage', 'loan', 'bill', 'insurance', 'other')),
       source_id INTEGER
     );
@@ -218,6 +219,9 @@ function ensureBudgetColumns(db: Database.Database): void {
       ({ name }) => name,
     ),
   );
+  if (!columns.has("frequency")) {
+    db.exec("ALTER TABLE budget_plan ADD COLUMN frequency TEXT NOT NULL DEFAULT 'monthly'");
+  }
   if (!columns.has("source_type")) {
     db.exec("ALTER TABLE budget_plan ADD COLUMN source_type TEXT NOT NULL DEFAULT 'other'");
   }

@@ -165,7 +165,7 @@ export function getDashboardData(db: Database.Database, now = new Date()): Dashb
       )
       .all(now.toISOString().slice(0, 10)) as DashboardData["upcoming"],
     ].sort((left, right) => left.dueDate.localeCompare(right.dueDate)).slice(0, 5),
-    budgets: listBudgets(db, currentMonth).length ? listBudgets(db, currentMonth) : db
+    budgets: listBudgets(db, now).length ? listBudgets(db, now) : db
       .prepare(
         "SELECT category, spent_cents AS spentCents, limit_cents AS limitCents FROM monthly_budget ORDER BY id",
       )

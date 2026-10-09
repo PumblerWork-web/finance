@@ -109,7 +109,7 @@ button { cursor: pointer; }
 .finance-entry-details span { color: #98a2b1; font-size: 10px; }
 .finance-entry-amount { color: #35445d; font-size: 12px; white-space: nowrap; }
 .budget-edit-form { display: grid; gap: 12px; margin-top: 17px; }
-.budget-edit-row { align-items: end; border-top: 1px solid #eff1f4; display: grid; gap: 12px; grid-template-columns: minmax(120px, .8fr) minmax(180px, 1.4fr) minmax(150px, 1fr) auto; padding-top: 13px; }
+.budget-edit-row { align-items: end; border-top: 1px solid #eff1f4; display: grid; gap: 12px; grid-template-columns: minmax(100px, .7fr) minmax(160px, 1.2fr) minmax(120px, .8fr) minmax(145px, 1fr) auto; padding-top: 13px; }
 .budget-commitment, .budget-source-hint { color: #8994a3; font-size: 9px; }
 .budget-source-hint { grid-column: 2 / 4; }
 .report-chart-panel .chart-wrap { height: 290px; }
@@ -383,6 +383,8 @@ h1, h2, p { margin-top: 0; }
   .user-menu { justify-content: center; }.user-avatar { flex: 0 0 32px; }
   .main-content { margin-left: 72px; }
   .content-grid { grid-template-columns: minmax(0, 1fr); }
+  .budget-edit-row { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
+  .budget-source-hint { grid-column: 1 / -1; }
 }
 @media (max-width: 560px) {
   body { min-width: 360px; }

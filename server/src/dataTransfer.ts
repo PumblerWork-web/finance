@@ -10,7 +10,7 @@ const backupTables = {
   monthly_budget: ["id", "category", "spent_cents", "limit_cents", "is_mock"],
   finance_entry: ["id", "kind", "amount_cents", "category", "description", "entry_date"],
   recurring_income: ["id", "amount_cents", "category", "description", "next_date", "recurrence"],
-  budget_plan: ["id", "category", "limit_cents", "source_type", "source_id"],
+  budget_plan: ["id", "category", "limit_cents", "frequency", "source_type", "source_id"],
   planner_item: ["id", "kind", "name", "provider", "amount_cents", "due_date", "recurrence", "notes", "property_name", "insured_value_cents"],
   app_setting: ["key", "value"],
 } as const;
@@ -83,7 +83,7 @@ export function restoreBackup(db: Database.Database, value: unknown): void {
     }
     if (table === "budget_plan" && Array.isArray(rows)) {
       tables[table] = rows.map((row) =>
-        isRecord(row) ? { source_type: "other", source_id: null, ...row } : row,
+        isRecord(row) ? { frequency: "monthly", source_type: "other", source_id: null, ...row } : row,
       );
     }
     const checkedRows = tables[table] ?? rows;

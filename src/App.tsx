@@ -40,6 +40,7 @@ import { api } from "./api";
 import type {
   AccountType,
   AuthStatus,
+  BudgetFrequency,
   BudgetPlan,
   BudgetSourceType,
   DashboardData,
@@ -1364,6 +1365,7 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
 interface BudgetDraft {
   category: string;
   limit: string;
+  frequency: BudgetFrequency;
   sourceType: BudgetSourceType;
   sourceId: string;
 }
@@ -1392,6 +1394,7 @@ function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
         setDrafts(loaded.map((budget) => ({
           category: budget.category,
           limit: (budget.limitCents / 100).toFixed(2),
+          frequency: budget.frequency,
           sourceType: budget.sourceType,
           sourceId: budget.sourceId === null ? "" : String(budget.sourceId),
         })));
@@ -1436,6 +1439,7 @@ function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
       const saved = await api.saveBudgets(drafts.map((budget) => ({
         category: budget.category,
         limitCents: Math.round(Number(budget.limit) * 100),
+        frequency: budget.frequency,
         sourceType: budget.sourceType,
         sourceId: budget.sourceType === "other" ? null : Number(budget.sourceId),
       })));
@@ -1443,11 +1447,12 @@ function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
       setDrafts(saved.map((budget) => ({
         category: budget.category,
         limit: (budget.limitCents / 100).toFixed(2),
+        frequency: budget.frequency,
         sourceType: budget.sourceType,
         sourceId: budget.sourceId === null ? "" : String(budget.sourceId),
       })));
       await onChanged();
-      setMessage("Monthly budgets saved.");
+      setMessage("Budgets saved.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to save budgets.");
     } finally {
@@ -1455,8 +1460,22 @@ function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
     }
   }
 
-  const spentThisMonth = budgets.reduce((total, budget) => total + budget.spentCents + budget.committedCents, 0);
-  const limitThisMonth = budgets.reduce((total, budget) => total + budget.limitCents, 0);
+  const cadenceLabel: Record<BudgetFrequency, string> = {
+    weekly: "Weekly",
+    fortnightly: "Fortnightly",
+    monthly: "Monthly",
+  };
+  const cadenceTotals = (["weekly", "fortnightly", "monthly"] as BudgetFrequency[])
+    .map((frequency) => {
+      const matching = budgets.filter((budget) => budget.frequency === frequency);
+      if (matching.length === 0) return null;
+      return {
+        frequency,
+        used: matching.reduce((total, budget) => total + budget.spentCents + budget.committedCents, 0),
+        limit: matching.reduce((total, budget) => total + budget.limitCents, 0),
+      };
+    })
+    .filter((total): total is NonNullable<typeof total> => total !== null);
   const sourceTypeLabel: Record<BudgetSourceType, string> = {
     mortgage: "Mortgage",
     loan: "Loan",
@@ -1471,8 +1490,8 @@ function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
 
   return (
     <div className="secondary-page">
-      <div className="welcome-row"><div><div className="eyebrow">PLAN YOUR MONTHLY SPENDING</div><h1>Budgets</h1><p className="welcome-subtitle">Include repayments, bills and insurance alongside your other spending.</p></div></div>
-      <div className="finance-summary-strip"><span>Tracked this month</span><strong>{formatMoney(spentThisMonth)} / {formatMoney(limitThisMonth)}</strong><span>{budgets.length} {budgets.length === 1 ? "category" : "categories"}</span></div>
+      <div className="welcome-row"><div><div className="eyebrow">HOUSEHOLD SPENDING PLAN</div><h1>Budgets</h1><p className="welcome-subtitle">Choose weekly, fortnightly or monthly targets for each cost.</p></div></div>
+      <div className="finance-summary-strip"><span>Budget totals by period</span>{cadenceTotals.map((total) => <strong key={total.frequency}>{cadenceLabel[total.frequency]} {formatMoney(total.used)} / {formatMoney(total.limit)}</strong>)}<span>{budgets.length} {budgets.length === 1 ? "category" : "categories"}</span></div>
       <section className="panel finance-list-panel">
         <div className="panel-heading"><div><h2>Monthly budget progress</h2><p>Actual spending plus monthly costs from selected accounts and bills.</p></div></div>
         {loading ? <p className="mortgage-status">Loading budgets…</p> : budgets.length === 0 ? <p className="dashboard-section-empty">No budgets yet. Add categories and monthly limits below.</p> : (
@@ -1480,7 +1499,7 @@ function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
             const totalUsed = budget.spentCents + budget.committedCents;
             const percentage = Math.round((totalUsed / budget.limitCents) * 100);
             return <div className="budget-row" key={budget.id}>
-              <div className="budget-topline"><strong>{budget.category}</strong><span>{formatMoney(totalUsed)} of {formatMoney(budget.limitCents)} · {percentage}%</span></div>
+              <div className="budget-topline"><strong>{budget.category} · {cadenceLabel[budget.frequency]}</strong><span>{formatMoney(totalUsed)} of {formatMoney(budget.limitCents)} · {percentage}%</span></div>
               {budget.committedCents > 0 && <small className="budget-commitment">{formatMoney(budget.spentCents)} spent · {formatMoney(budget.committedCents)} planned from linked item</small>}
               <div className="budget-track"><span className={percentage >= 95 ? "near-limit" : ""} style={{ width: `${Math.min(100, percentage)}%` }} /></div>
             </div>;
@@ -1488,7 +1507,7 @@ function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
         )}
       </section>
       <section className="panel finance-entry-panel">
-        <div className="accounts-form-heading"><div><h2>Budget categories</h2><p>Select an existing cost, or choose Other to name a custom category.</p></div><button className="secondary-button add-split-button" onClick={() => setDrafts((current) => [...current, { category: "", limit: "", sourceType: "other", sourceId: "" }])} type="button">+ Add category</button></div>
+        <div className="accounts-form-heading"><div><h2>Budget categories</h2><p>Select an existing cost, or choose Other to name a custom category.</p></div><button className="secondary-button add-split-button" onClick={() => setDrafts((current) => [...current, { category: "", limit: "", frequency: "monthly", sourceType: "other", sourceId: "" }])} type="button">+ Add category</button></div>
         {loading ? <p className="mortgage-status">Loading…</p> : (
           <form className="budget-edit-form" onSubmit={submit}>
             {drafts.map((budget, index) => {
@@ -1514,7 +1533,10 @@ function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
                     {options.map((option) => <option key={option.id} value={option.id}>{option.name} · {option.detail}</option>)}
                   </select></label>
                 )}
-                <label>Monthly limit (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" min="0.01" onChange={(event) => updateDraft(index, { limit: event.target.value })} required step="0.01" type="number" value={budget.limit} /></span></label>
+                <label>Budget period<select onChange={(event) => updateDraft(index, { frequency: event.target.value as BudgetFrequency })} value={budget.frequency}>
+                  <option value="weekly">Weekly</option><option value="fortnightly">Fortnightly</option><option value="monthly">Monthly</option>
+                </select></label>
+                <label>{cadenceLabel[budget.frequency]} limit (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" min="0.01" onChange={(event) => updateDraft(index, { limit: event.target.value })} required step="0.01" type="number" value={budget.limit} /></span></label>
                 <button className="account-delete-button" onClick={() => setDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button">Remove</button>
               </div>;
             })}
