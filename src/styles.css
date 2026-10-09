@@ -254,6 +254,8 @@ h1, h2, p { margin-top: 0; }
 .primary-button { background: #607dd9; border: 1px solid #607dd9; color: #fff; }.primary-button:hover { background: #526fc9; }.primary-button:disabled { cursor: wait; opacity: .7; }
 .secondary-button { background: #fff; border: 1px solid #e6eaf0; color: #657188; }.secondary-button:hover { background: #f8f9fb; }
 .full-button { margin-top: 2px; width: 100%; }
+.update-button { padding: 7px 12px; white-space: nowrap; }
+.update-status { color: #657188; font-size: 11px; white-space: nowrap; }
 .form-error { background: #fff2ef; border-radius: 6px; color: #bd6557; font-size: 11px; padding: 9px 10px; }
 .auth-privacy { align-items: center; border-top: 1px solid #eff1f4; color: #98a2b0; display: flex; font-size: 10px; gap: 8px; line-height: 1.5; margin-top: 22px; padding-top: 17px; }.auth-privacy svg { color: #71a58d; flex: 0 0 auto; }
 .loading-screen { align-items: center; color: #7d899b; display: flex; font-size: 12px; gap: 11px; height: 100vh; justify-content: center; }

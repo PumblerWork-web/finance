@@ -96,6 +96,40 @@ function formatMonth(month: string): string {
   );
 }
 
+function UpdateControl() {
+  const [state, setState] = useState<UpdaterState | null>(null);
+  const updater = window.financeUpdater;
+
+  useEffect(() => {
+    if (!updater) return;
+    void updater.getState().then(setState);
+    return updater.onState(setState);
+  }, [updater]);
+
+  if (!updater || !state) return null;
+
+  if (state.status === "available") {
+    return (
+      <button className="primary-button update-button" onClick={() => void updater.install()} type="button">
+        <Download size={14} /> Update to v{state.version}
+      </button>
+    );
+  }
+  if (state.status === "downloading" || state.status === "ready") {
+    return <span className="update-status">Updating… {state.percent}% — the app will restart</span>;
+  }
+  if (state.status === "checking") return <span className="update-status">Checking for updates…</span>;
+
+  return (
+    <>
+      {state.message && <span className="update-status">{state.message}</span>}
+      <button className="secondary-button update-button" onClick={() => void updater.check()} type="button">
+        Check for updates
+      </button>
+    </>
+  );
+}
+
 export default function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
@@ -224,6 +258,7 @@ export default function App() {
         <header className="topbar">
           <div className="breadcrumbs"><span>Home</span><span className="crumb-separator">/</span><strong>{activePage}</strong></div>
           <div className="topbar-actions">
+            <UpdateControl />
             <span className="financial-year">FY {data?.financialYear ?? "—"}</span>
             <button className="icon-button" aria-label="Notifications"><Bell size={18} /><i /></button>
             <div className="topbar-divider" />

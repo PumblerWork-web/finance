@@ -1,24 +1,59 @@
 "use strict";
 
 const path = require("node:path");
-const { app, BrowserWindow, dialog, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 
 let backend;
 let mainWindow;
+let updateState = { status: "idle", version: null, percent: 0, message: "" };
 
-async function promptToRestartForUpdate() {
-  const { response } = await dialog.showMessageBox(mainWindow, {
-    type: "info",
-    title: "Update ready to install",
-    message: "A Finance Dashboard update has been downloaded.",
-    detail: "Restart the app to install the update.",
-    buttons: ["Restart now", "Later"],
-    defaultId: 0,
-    cancelId: 1,
+function setUpdateState(changes) {
+  updateState = { ...updateState, ...changes };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("updater:state", updateState);
+  }
+}
+
+function checkForUpdates() {
+  if (!app.isPackaged) {
+    setUpdateState({ status: "none", message: "Updates are only available in the installed app." });
+    return Promise.resolve();
+  }
+  if (["checking", "downloading", "ready"].includes(updateState.status)) return Promise.resolve();
+  setUpdateState({ status: "checking", message: "" });
+  return autoUpdater.checkForUpdates().catch(() => undefined);
+}
+
+function setupUpdater() {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  autoUpdater.on("update-available", (info) => {
+    setUpdateState({ status: "available", version: info.version, percent: 0, message: "" });
+  });
+  autoUpdater.on("update-not-available", () => {
+    setUpdateState({ status: "none", message: "You have the latest version." });
+  });
+  autoUpdater.on("download-progress", (progress) => {
+    setUpdateState({ status: "downloading", percent: Math.round(progress.percent) });
+  });
+  autoUpdater.on("update-downloaded", () => {
+    setUpdateState({ status: "ready", percent: 100 });
+    setImmediate(() => autoUpdater.quitAndInstall());
+  });
+  autoUpdater.on("error", (error) => {
+    console.error("App update error:", error);
+    setUpdateState({ status: "error", message: "Couldn't check for updates. Please try again later." });
   });
 
-  if (response === 0) autoUpdater.quitAndInstall();
+  ipcMain.handle("updater:get-state", () => updateState);
+  ipcMain.handle("updater:check", () => checkForUpdates());
+  ipcMain.handle("updater:install", () => {
+    if (updateState.status !== "available") return;
+    setUpdateState({ status: "downloading", percent: 0 });
+    return autoUpdater.downloadUpdate().catch(() => undefined);
+  });
 }
 
 async function launch() {
@@ -28,6 +63,7 @@ async function launch() {
   process.env.NODE_ENV = "production";
   process.env.FINANCE_DATA_DIR = path.join(app.getPath("userData"), "data");
   process.env.PORT = "0";
+  setupUpdater();
 
   backend = require(path.join(app.getAppPath(), "server", "dist", "index.js"));
   if (!backend.server.listening) {
@@ -50,6 +86,7 @@ async function launch() {
     minHeight: 700,
     backgroundColor: "#f5f5f2",
     webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -64,21 +101,7 @@ async function launch() {
   });
   await mainWindow.loadURL(origin);
 
-  if (app.isPackaged) {
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.on("update-downloaded", () => {
-      void promptToRestartForUpdate().catch((error) => {
-        console.error("Unable to prompt to install the downloaded update:", error);
-      });
-    });
-    autoUpdater.on("error", (error) => {
-      console.error("Unable to check for or download an app update:", error);
-    });
-    void autoUpdater.checkForUpdates().catch((error) => {
-      console.error("Unable to check for app updates:", error);
-    });
-  }
+  if (app.isPackaged) void checkForUpdates();
 }
 
 app.on("window-all-closed", () => app.quit());
