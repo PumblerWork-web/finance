@@ -41,6 +41,7 @@ import type {
   AccountType,
   AuthStatus,
   BudgetPlan,
+  BudgetSourceType,
   DashboardData,
   FinanceEntry,
   FinanceReport,
@@ -1363,24 +1364,64 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
 interface BudgetDraft {
   category: string;
   limit: string;
+  sourceType: BudgetSourceType;
+  sourceId: string;
+}
+
+interface BudgetSourceOption {
+  id: number;
+  name: string;
+  detail: string;
 }
 
 function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
   const [budgets, setBudgets] = useState<BudgetPlan[]>([]);
   const [drafts, setDrafts] = useState<BudgetDraft[]>([]);
+  const [sources, setSources] = useState<Record<BudgetSourceType, BudgetSourceOption[]>>({
+    mortgage: [], loan: [], bill: [], insurance: [], other: [],
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    api.budgets()
-      .then((loaded) => {
+    Promise.all([api.budgets(), api.mortgage(), api.loans(), api.plannerItems("bill"), api.plannerItems("insurance")])
+      .then(([loaded, mortgages, loans, bills, insurance]) => {
         setBudgets(loaded);
         setDrafts(loaded.map((budget) => ({
           category: budget.category,
           limit: (budget.limitCents / 100).toFixed(2),
+          sourceType: budget.sourceType,
+          sourceId: budget.sourceId === null ? "" : String(budget.sourceId),
         })));
+        setSources({
+          mortgage: mortgages.map((mortgage) => ({
+            id: mortgage.id,
+            name: mortgage.name,
+            detail: mortgage.repaymentCents === null
+              ? "Repayment not set"
+              : `${formatMoney(mortgage.repaymentCents)} ${mortgage.repaymentFrequency}`,
+          })),
+          loan: loans.map((loan) => ({
+            id: loan.id,
+            name: loan.name,
+            detail: loan.repaymentCents === null
+              ? "Repayment not set"
+              : `${formatMoney(loan.repaymentCents)} ${loan.repaymentFrequency}`,
+          })),
+          bill: bills.map((bill) => ({
+            id: bill.id,
+            name: bill.name,
+            detail: `${formatMoney(bill.amountCents)} ${bill.recurrence === "none" ? "one-off" : bill.recurrence}`,
+          })),
+          insurance: insurance.map((policy) => ({
+            id: policy.id,
+            name: policy.name,
+            detail: `${formatMoney(policy.amountCents)} premium ${policy.recurrence === "none" ? "one-off" : policy.recurrence}`,
+          })),
+          other: [],
+        });
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load budgets."))
       .finally(() => setLoading(false));
@@ -1395,9 +1436,16 @@ function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
       const saved = await api.saveBudgets(drafts.map((budget) => ({
         category: budget.category,
         limitCents: Math.round(Number(budget.limit) * 100),
+        sourceType: budget.sourceType,
+        sourceId: budget.sourceType === "other" ? null : Number(budget.sourceId),
       })));
       setBudgets(saved);
-      setDrafts(saved.map((budget) => ({ category: budget.category, limit: (budget.limitCents / 100).toFixed(2) })));
+      setDrafts(saved.map((budget) => ({
+        category: budget.category,
+        limit: (budget.limitCents / 100).toFixed(2),
+        sourceType: budget.sourceType,
+        sourceId: budget.sourceId === null ? "" : String(budget.sourceId),
+      })));
       await onChanged();
       setMessage("Monthly budgets saved.");
     } catch (reason) {
@@ -1407,34 +1455,69 @@ function BudgetsPage({ onChanged }: { onChanged: () => Promise<void> }) {
     }
   }
 
-  const spentThisMonth = budgets.reduce((total, budget) => total + budget.spentCents, 0);
+  const spentThisMonth = budgets.reduce((total, budget) => total + budget.spentCents + budget.committedCents, 0);
   const limitThisMonth = budgets.reduce((total, budget) => total + budget.limitCents, 0);
+  const sourceTypeLabel: Record<BudgetSourceType, string> = {
+    mortgage: "Mortgage",
+    loan: "Loan",
+    bill: "Bill",
+    insurance: "Insurance",
+    other: "Other",
+  };
+
+  function updateDraft(index: number, change: Partial<BudgetDraft>) {
+    setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...change } : item));
+  }
 
   return (
     <div className="secondary-page">
-      <div className="welcome-row"><div><div className="eyebrow">PLAN YOUR MONTHLY SPENDING</div><h1>Budgets</h1><p className="welcome-subtitle">Set spending limits by category; spending entries update progress automatically.</p></div></div>
+      <div className="welcome-row"><div><div className="eyebrow">PLAN YOUR MONTHLY SPENDING</div><h1>Budgets</h1><p className="welcome-subtitle">Include repayments, bills and insurance alongside your other spending.</p></div></div>
       <div className="finance-summary-strip"><span>Tracked this month</span><strong>{formatMoney(spentThisMonth)} / {formatMoney(limitThisMonth)}</strong><span>{budgets.length} {budgets.length === 1 ? "category" : "categories"}</span></div>
       <section className="panel finance-list-panel">
-        <div className="panel-heading"><div><h2>Monthly budget progress</h2><p>Based on this month’s spending entries in matching categories.</p></div></div>
+        <div className="panel-heading"><div><h2>Monthly budget progress</h2><p>Actual spending plus monthly costs from selected accounts and bills.</p></div></div>
         {loading ? <p className="mortgage-status">Loading budgets…</p> : budgets.length === 0 ? <p className="dashboard-section-empty">No budgets yet. Add categories and monthly limits below.</p> : (
           <div className="budget-list">{budgets.map((budget) => {
-            const percentage = Math.round((budget.spentCents / budget.limitCents) * 100);
+            const totalUsed = budget.spentCents + budget.committedCents;
+            const percentage = Math.round((totalUsed / budget.limitCents) * 100);
             return <div className="budget-row" key={budget.id}>
-              <div className="budget-topline"><strong>{budget.category}</strong><span>{formatMoney(budget.spentCents)} of {formatMoney(budget.limitCents)} · {percentage}%</span></div>
+              <div className="budget-topline"><strong>{budget.category}</strong><span>{formatMoney(totalUsed)} of {formatMoney(budget.limitCents)} · {percentage}%</span></div>
+              {budget.committedCents > 0 && <small className="budget-commitment">{formatMoney(budget.spentCents)} spent · {formatMoney(budget.committedCents)} planned from linked item</small>}
               <div className="budget-track"><span className={percentage >= 95 ? "near-limit" : ""} style={{ width: `${Math.min(100, percentage)}%` }} /></div>
             </div>;
           })}</div>
         )}
       </section>
       <section className="panel finance-entry-panel">
-        <div className="accounts-form-heading"><div><h2>Budget categories</h2><p>Add or remove monthly limits as needed.</p></div><button className="secondary-button add-split-button" onClick={() => setDrafts((current) => [...current, { category: "", limit: "" }])} type="button">+ Add category</button></div>
+        <div className="accounts-form-heading"><div><h2>Budget categories</h2><p>Select an existing cost, or choose Other to name a custom category.</p></div><button className="secondary-button add-split-button" onClick={() => setDrafts((current) => [...current, { category: "", limit: "", sourceType: "other", sourceId: "" }])} type="button">+ Add category</button></div>
         {loading ? <p className="mortgage-status">Loading…</p> : (
           <form className="budget-edit-form" onSubmit={submit}>
-            {drafts.map((budget, index) => <div className="budget-edit-row" key={index}>
-              <label>Category<input maxLength={80} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, category: event.target.value } : item))} required value={budget.category} /></label>
-              <label>Monthly limit (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" min="0.01" onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, limit: event.target.value } : item))} required step="0.01" type="number" value={budget.limit} /></span></label>
-              <button className="account-delete-button" onClick={() => setDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button">Remove</button>
-            </div>)}
+            {drafts.map((budget, index) => {
+              const options = sources[budget.sourceType];
+              return <div className="budget-edit-row" key={index}>
+                <label>Include<select onChange={(event) => {
+                  const sourceType = event.target.value as BudgetSourceType;
+                  updateDraft(index, { sourceType, sourceId: "", category: "" });
+                }} value={budget.sourceType}>
+                  {Object.entries(sourceTypeLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select></label>
+                {budget.sourceType === "other" ? (
+                  <label>Category<input maxLength={80} onChange={(event) => updateDraft(index, { category: event.target.value })} placeholder="e.g. Pet costs" required value={budget.category} /></label>
+                ) : (
+                  <label>{sourceTypeLabel[budget.sourceType]} item<select onChange={(event) => {
+                    const source = options.find((option) => String(option.id) === event.target.value);
+                    updateDraft(index, {
+                      sourceId: event.target.value,
+                      category: source ? `${sourceTypeLabel[budget.sourceType]}: ${source.name}` : "",
+                    });
+                  }} required value={budget.sourceId}>
+                    <option value="">Choose an item</option>
+                    {options.map((option) => <option key={option.id} value={option.id}>{option.name} · {option.detail}</option>)}
+                  </select></label>
+                )}
+                <label>Monthly limit (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" min="0.01" onChange={(event) => updateDraft(index, { limit: event.target.value })} required step="0.01" type="number" value={budget.limit} /></span></label>
+                <button className="account-delete-button" onClick={() => setDrafts((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button">Remove</button>
+              </div>;
+            })}
             {error && <div className="form-error" role="alert">{error}</div>}
             {message && <div className="mortgage-success" role="status">{message}</div>}
             <div className="finance-form-actions"><button className="primary-button" disabled={saving}>{saving ? "Saving…" : "Save budgets"} <ArrowRight size={15} /></button></div>

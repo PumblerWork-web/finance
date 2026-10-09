@@ -5,6 +5,7 @@ import { createDatabase } from "./database";
 import { createEntry } from "./finance";
 import { exportBackup, restoreBackup } from "./dataTransfer";
 import { getLoans, saveLoans } from "./loans";
+import { listBudgets, saveBudgets } from "./finance";
 
 test("backup restores finance data without replacing the destination account", async () => {
   const source = createDatabase(":memory:");
@@ -48,6 +49,7 @@ test("backup restores finance data without replacing the destination account", a
 
 test("version 1 backups restore without general loans", () => {
   const source = createDatabase(":memory:");
+  saveBudgets(source, [{ category: "Custom spending", limitCents: 100_000 }]);
   const backup = exportBackup(source);
   for (const account of backup.tables.financial_account) delete account.website_url;
   for (const mortgage of backup.tables.mortgage) {
@@ -57,6 +59,10 @@ test("version 1 backups restore without general loans", () => {
   for (const item of backup.tables.planner_item) {
     delete item.property_name;
     delete item.insured_value_cents;
+  }
+  for (const budget of backup.tables.budget_plan) {
+    delete budget.source_type;
+    delete budget.source_id;
   }
   const destination = createDatabase(":memory:");
   saveLoans(destination, [{
@@ -76,6 +82,7 @@ test("version 1 backups restore without general loans", () => {
   });
 
   assert.deepEqual(getLoans(destination), []);
+  assert.equal(listBudgets(destination, new Date().toISOString().slice(0, 7))[0].sourceType, "other");
   source.close();
   destination.close();
 });

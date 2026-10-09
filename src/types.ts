@@ -111,7 +111,12 @@ export interface BudgetPlan {
   category: string;
   limitCents: number;
   spentCents: number;
+  sourceType: BudgetSourceType;
+  sourceId: number | null;
+  committedCents: number;
 }
+
+export type BudgetSourceType = "mortgage" | "loan" | "bill" | "insurance" | "other";
 
 export interface PlannerItem {
   id: number;

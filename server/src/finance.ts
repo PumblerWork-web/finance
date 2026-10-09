@@ -39,11 +39,18 @@ export interface BudgetPlan {
   category: string;
   limitCents: number;
   spentCents: number;
+  sourceType: BudgetSourceType;
+  sourceId: number | null;
+  committedCents: number;
 }
+
+export type BudgetSourceType = "mortgage" | "loan" | "bill" | "insurance" | "other";
 
 export interface BudgetInput {
   category: string;
   limitCents: number;
+  sourceType?: BudgetSourceType;
+  sourceId?: number | null;
 }
 
 export interface PlannerItem {
@@ -256,20 +263,30 @@ function validateEntry(input: FinanceEntryInput): void {
 }
 
 export function listBudgets(db: Database.Database, month: string): BudgetPlan[] {
-  return db.prepare(
+  const budgets = db.prepare(
     `SELECT b.id, b.category, b.limit_cents AS limitCents,
-            COALESCE(SUM(e.amount_cents), 0) AS spentCents
+            COALESCE(SUM(e.amount_cents), 0) AS spentCents,
+            b.source_type AS sourceType, b.source_id AS sourceId
      FROM budget_plan b
      LEFT JOIN finance_entry e
        ON e.kind = 'spending' AND lower(e.category) = lower(b.category) AND substr(e.entry_date, 1, 7) = ?
      GROUP BY b.id, b.category, b.limit_cents
      ORDER BY b.category COLLATE NOCASE`,
-  ).all(month) as BudgetPlan[];
+  ).all(month) as Omit<BudgetPlan, "committedCents">[];
+  return budgets.map((budget) => ({
+    ...budget,
+    committedCents: Math.max(
+      0,
+      getBudgetSourceMonthlyCost(db, budget.sourceType, budget.sourceId, month) -
+        (budget.sourceType === "other" ? 0 : budget.spentCents),
+    ),
+  }));
 }
 
 export function saveBudgets(db: Database.Database, budgets: BudgetInput[]): BudgetPlan[] {
   if (budgets.length > 100) throw new Error("You can save up to 100 budget categories.");
   const seen = new Set<string>();
+  const seenSources = new Set<string>();
   for (const budget of budgets) {
     if (typeof budget.category !== "string" || !budget.category.trim() || budget.category.trim().length > 80) {
       throw new Error("Enter a budget category of up to 80 characters.");
@@ -277,15 +294,69 @@ export function saveBudgets(db: Database.Database, budgets: BudgetInput[]): Budg
     const key = budget.category.trim().toLocaleLowerCase();
     if (seen.has(key)) throw new Error("Budget categories must be unique.");
     seen.add(key);
+    const sourceType = budget.sourceType ?? "other";
+    const sourceId = budget.sourceId ?? null;
+    if (!( ["mortgage", "loan", "bill", "insurance", "other"] as string[]).includes(sourceType)) {
+      throw new Error("Choose a valid budget type.");
+    }
+    if (sourceType === "other") {
+      if (sourceId !== null) throw new Error("Other budget categories cannot be linked to a source item.");
+    } else {
+      if (!Number.isSafeInteger(sourceId) || (sourceId as number) <= 0) {
+        throw new Error("Choose an item to include in this budget.");
+      }
+      const sourceExists = sourceType === "mortgage"
+        ? db.prepare("SELECT 1 AS found FROM mortgage WHERE id = ? AND is_mock = 0").get(sourceId)
+        : sourceType === "loan"
+          ? db.prepare("SELECT 1 AS found FROM personal_loan WHERE id = ?").get(sourceId)
+          : db.prepare("SELECT 1 AS found FROM planner_item WHERE id = ? AND kind = ?").get(sourceId, sourceType);
+      if (!sourceExists) throw new Error("That budget source was not found. Reload and choose another item.");
+      const sourceKey = `${sourceType}:${sourceId}`;
+      if (seenSources.has(sourceKey)) throw new Error("Each source item can only be included once.");
+      seenSources.add(sourceKey);
+    }
     validateAmount(budget.limitCents, "monthly budget");
   }
   const save = db.transaction(() => {
     db.prepare("DELETE FROM budget_plan").run();
-    const insert = db.prepare("INSERT INTO budget_plan (category, limit_cents) VALUES (?, ?)");
-    budgets.forEach(({ category, limitCents }) => insert.run(category.trim(), limitCents));
+    const insert = db.prepare("INSERT INTO budget_plan (category, limit_cents, source_type, source_id) VALUES (?, ?, ?, ?)");
+    budgets.forEach(({ category, limitCents, sourceType = "other", sourceId = null }) =>
+      insert.run(category.trim(), limitCents, sourceType, sourceId));
   });
   save();
   return listBudgets(db, new Date().toISOString().slice(0, 7));
+}
+
+function getBudgetSourceMonthlyCost(
+  db: Database.Database,
+  sourceType: BudgetSourceType,
+  sourceId: number | null,
+  month: string,
+): number {
+  if (!sourceId || sourceType === "other") return 0;
+  if (sourceType === "mortgage" || sourceType === "loan") {
+    const table = sourceType === "mortgage" ? "mortgage" : "personal_loan";
+    const row = db.prepare(
+      `SELECT repayment_cents AS amountCents, repayment_frequency AS frequency
+       FROM ${table} WHERE id = ? ${sourceType === "mortgage" ? "AND is_mock = 0" : ""}`,
+    ).get(sourceId) as { amountCents: number | null; frequency: string } | undefined;
+    if (!row?.amountCents) return 0;
+    if (row.frequency === "weekly") return Math.round(row.amountCents * 52 / 12);
+    if (row.frequency === "fortnightly") return Math.round(row.amountCents * 26 / 12);
+    return row.amountCents;
+  }
+
+  const row = db.prepare(
+    `SELECT amount_cents AS amountCents, due_date AS dueDate, recurrence
+     FROM planner_item WHERE id = ? AND kind = ?`,
+  ).get(sourceId, sourceType) as { amountCents: number; dueDate: string; recurrence: Recurrence } | undefined;
+  if (!row) return 0;
+  if (row.recurrence === "none") return row.dueDate.slice(0, 7) === month ? row.amountCents : 0;
+  if (row.recurrence === "weekly") return Math.round(row.amountCents * 52 / 12);
+  if (row.recurrence === "fortnightly") return Math.round(row.amountCents * 26 / 12);
+  if (row.recurrence === "quarterly") return Math.round(row.amountCents / 3);
+  if (row.recurrence === "yearly") return Math.round(row.amountCents / 12);
+  return row.amountCents;
 }
 
 export function listPlannerItems(

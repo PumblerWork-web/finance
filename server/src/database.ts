@@ -117,7 +117,9 @@ export function createDatabase(
     CREATE TABLE IF NOT EXISTS budget_plan (
       id INTEGER PRIMARY KEY,
       category TEXT NOT NULL UNIQUE,
-      limit_cents INTEGER NOT NULL CHECK (limit_cents > 0)
+      limit_cents INTEGER NOT NULL CHECK (limit_cents > 0),
+      source_type TEXT NOT NULL DEFAULT 'other' CHECK (source_type IN ('mortgage', 'loan', 'bill', 'insurance', 'other')),
+      source_id INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS planner_item (
@@ -142,6 +144,7 @@ export function createDatabase(
   ensureAccountColumns(db);
   ensureMortgageColumns(db);
   ensurePlannerColumns(db);
+  ensureBudgetColumns(db);
   if (options.seedSampleData ?? true) seedMockData(db);
   return db;
 }
@@ -206,6 +209,20 @@ function ensurePlannerColumns(db: Database.Database): void {
   }
   if (!columns.has("insured_value_cents")) {
     db.exec("ALTER TABLE planner_item ADD COLUMN insured_value_cents INTEGER NOT NULL DEFAULT 0");
+  }
+}
+
+function ensureBudgetColumns(db: Database.Database): void {
+  const columns = new Set(
+    (db.prepare("PRAGMA table_info(budget_plan)").all() as Array<{ name: string }>).map(
+      ({ name }) => name,
+    ),
+  );
+  if (!columns.has("source_type")) {
+    db.exec("ALTER TABLE budget_plan ADD COLUMN source_type TEXT NOT NULL DEFAULT 'other'");
+  }
+  if (!columns.has("source_id")) {
+    db.exec("ALTER TABLE budget_plan ADD COLUMN source_id INTEGER");
   }
 }
 

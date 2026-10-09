@@ -590,10 +590,20 @@ function parseEntry(value: unknown): FinanceEntryInput {
 function parseBudget(value: unknown): BudgetInput {
   if (!value || typeof value !== "object") throw new Error("Enter valid budget details.");
   const budget = value as Record<string, unknown>;
-  if (typeof budget.category !== "string" || typeof budget.limitCents !== "number") {
+  if (
+    typeof budget.category !== "string" ||
+    typeof budget.limitCents !== "number" ||
+    (budget.sourceType !== undefined && typeof budget.sourceType !== "string") ||
+    (budget.sourceId !== undefined && budget.sourceId !== null && typeof budget.sourceId !== "number")
+  ) {
     throw new Error("Enter valid budget details.");
   }
-  return { category: budget.category, limitCents: budget.limitCents };
+  return {
+    category: budget.category,
+    limitCents: budget.limitCents,
+    sourceType: budget.sourceType as BudgetInput["sourceType"],
+    sourceId: budget.sourceId as number | null | undefined,
+  };
 }
 
 function parseRecurringIncome(value: unknown): RecurringIncomeInput {

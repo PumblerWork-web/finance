@@ -99,6 +99,88 @@ test("income and spending entries drive budgets, reports and dashboard charts", 
   db.close();
 });
 
+test("selected budget sources add monthly committed costs by payment frequency", () => {
+  const db = createDatabase(":memory:");
+  const mortgage = saveMortgage(db, [{
+    name: "Home loan",
+    balanceCents: 20_000_000,
+    interestRateBps: null,
+    repaymentCents: 100_000,
+    propertyName: "Home",
+    propertyValueCents: 50_000_000,
+    rateType: "variable",
+    repaymentFrequency: "monthly",
+  }])[0];
+  const loan = saveLoans(db, [{
+    name: "Car loan",
+    lender: "Lender",
+    type: "car",
+    balanceCents: 5_000_000,
+    interestRateBps: null,
+    repaymentCents: 50_000,
+    repaymentFrequency: "fortnightly",
+  }])[0];
+  const bill = createPlannerItem(db, {
+    kind: "bill",
+    name: "Power",
+    provider: "Utility",
+    amountCents: 10_000,
+    dueDate: "2026-10-15",
+    recurrence: "weekly",
+    notes: "",
+  });
+  const policy = createPlannerItem(db, {
+    kind: "insurance",
+    name: "Home policy",
+    provider: "Insurer",
+    amountCents: 1_200_000,
+    dueDate: "2026-10-15",
+    recurrence: "yearly",
+    propertyName: "Home",
+    insuredValueCents: 50_000_000,
+    notes: "",
+  });
+  const oneOff = createPlannerItem(db, {
+    kind: "bill",
+    name: "Council rates",
+    provider: "Council",
+    amountCents: 60_000,
+    dueDate: "2026-10-25",
+    recurrence: "none",
+    notes: "",
+  });
+  createEntry(db, {
+    kind: "spending",
+    amountCents: 25_000,
+    category: "Mortgage: Home loan",
+    description: "Loan payment recorded",
+    entryDate: "2026-10-15",
+  });
+  const saved = saveBudgets(db, [
+    { category: "Mortgage: Home loan", limitCents: 200_000, sourceType: "mortgage", sourceId: mortgage.id },
+    { category: "Loan: Car loan", limitCents: 200_000, sourceType: "loan", sourceId: loan.id },
+    { category: "Bill: Power", limitCents: 200_000, sourceType: "bill", sourceId: bill.id },
+    { category: "Insurance: Home", limitCents: 200_000, sourceType: "insurance", sourceId: policy.id },
+    { category: "Bill: Council rates", limitCents: 200_000, sourceType: "bill", sourceId: oneOff.id },
+    { category: "Other: Pets", limitCents: 200_000, sourceType: "other" },
+  ]);
+
+  assert.deepEqual(Object.fromEntries(saved.map((budget) => [budget.category, budget.committedCents])), {
+    "Bill: Council rates": 60_000,
+    "Bill: Power": 43_333,
+    "Insurance: Home": 100_000,
+    "Loan: Car loan": 108_333,
+    "Mortgage: Home loan": 75_000,
+    "Other: Pets": 0,
+  });
+  const mortgageBudget = saved.find((budget) => budget.category === "Mortgage: Home loan");
+  assert.ok(mortgageBudget);
+  assert.equal(mortgageBudget.spentCents, 25_000);
+  assert.equal(mortgageBudget.spentCents + mortgageBudget.committedCents, 100_000);
+  assert.equal(listBudgets(db, "2026-11").find((budget) => budget.sourceId === oneOff.id)?.committedCents, 0);
+  db.close();
+});
+
 test("recurring income is scheduled, editable, and included in dashboard and report expectations", () => {
   const db = createDatabase(":memory:");
   const salary = createRecurringIncome(db, {

@@ -92,7 +92,7 @@ export const api = {
     request<RecurringIncome>(`/api/recurring-income/${id}`, { method: "PUT", body: JSON.stringify(item) }),
   deleteRecurringIncome: (id: number) => request<void>(`/api/recurring-income/${id}`, { method: "DELETE" }),
   budgets: () => request<BudgetPlan[]>("/api/budgets"),
-  saveBudgets: (budgets: Array<Omit<BudgetPlan, "id" | "spentCents">>) =>
+  saveBudgets: (budgets: Array<Omit<BudgetPlan, "id" | "spentCents" | "committedCents">>) =>
     request<BudgetPlan[]>("/api/budgets", { method: "PUT", body: JSON.stringify({ budgets }) }),
   plannerItems: (kind: PlannerKind) => request<PlannerItem[]>(`/api/planner?kind=${kind}`),
   createPlannerItem: (item: PlannerItemInput) =>
