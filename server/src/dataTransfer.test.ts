@@ -50,6 +50,14 @@ test("version 1 backups restore without general loans", () => {
   const source = createDatabase(":memory:");
   const backup = exportBackup(source);
   for (const account of backup.tables.financial_account) delete account.website_url;
+  for (const mortgage of backup.tables.mortgage) {
+    delete mortgage.property_name;
+    delete mortgage.property_value_cents;
+  }
+  for (const item of backup.tables.planner_item) {
+    delete item.property_name;
+    delete item.insured_value_cents;
+  }
   const destination = createDatabase(":memory:");
   saveLoans(destination, [{
     name: "Old PC loan",

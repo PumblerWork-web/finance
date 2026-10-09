@@ -53,6 +53,8 @@ export function createDatabase(
       is_mock INTEGER NOT NULL DEFAULT 0 CHECK (is_mock IN (0, 1)),
       interest_rate_bps INTEGER,
       repayment_cents INTEGER,
+      property_name TEXT NOT NULL DEFAULT 'Home',
+      property_value_cents INTEGER NOT NULL DEFAULT 0,
       rate_type TEXT NOT NULL DEFAULT 'variable' CHECK (rate_type IN ('variable', 'fixed')),
       repayment_frequency TEXT NOT NULL DEFAULT 'monthly' CHECK (repayment_frequency IN ('weekly', 'fortnightly', 'monthly')),
       updated_at TEXT
@@ -126,7 +128,9 @@ export function createDatabase(
       amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
       due_date TEXT NOT NULL,
       recurrence TEXT NOT NULL CHECK (recurrence IN ('none', 'weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly')),
-      notes TEXT NOT NULL DEFAULT ''
+      notes TEXT NOT NULL DEFAULT '',
+      property_name TEXT NOT NULL DEFAULT 'Home',
+      insured_value_cents INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS app_setting (
@@ -137,6 +141,7 @@ export function createDatabase(
 
   ensureAccountColumns(db);
   ensureMortgageColumns(db);
+  ensurePlannerColumns(db);
   if (options.seedSampleData ?? true) seedMockData(db);
   return db;
 }
@@ -181,6 +186,26 @@ function ensureMortgageColumns(db: Database.Database): void {
   }
   if (!columns.has("updated_at")) {
     db.exec("ALTER TABLE mortgage ADD COLUMN updated_at TEXT");
+  }
+  if (!columns.has("property_name")) {
+    db.exec("ALTER TABLE mortgage ADD COLUMN property_name TEXT NOT NULL DEFAULT 'Home'");
+  }
+  if (!columns.has("property_value_cents")) {
+    db.exec("ALTER TABLE mortgage ADD COLUMN property_value_cents INTEGER NOT NULL DEFAULT 0");
+  }
+}
+
+function ensurePlannerColumns(db: Database.Database): void {
+  const columns = new Set(
+    (db.prepare("PRAGMA table_info(planner_item)").all() as Array<{ name: string }>).map(
+      ({ name }) => name,
+    ),
+  );
+  if (!columns.has("property_name")) {
+    db.exec("ALTER TABLE planner_item ADD COLUMN property_name TEXT NOT NULL DEFAULT 'Home'");
+  }
+  if (!columns.has("insured_value_cents")) {
+    db.exec("ALTER TABLE planner_item ADD COLUMN insured_value_cents INTEGER NOT NULL DEFAULT 0");
   }
 }
 

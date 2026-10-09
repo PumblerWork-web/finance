@@ -148,24 +148,124 @@ test("bill and insurance recurrence calculates upcoming due dates", () => {
     name: "Home policy",
     provider: "Insurer",
     amountCents: 120000,
+    propertyName: "Home",
+    insuredValueCents: 85_000_000,
     dueDate: "2026-12-01",
     recurrence: "none",
     notes: "Renewal",
   });
+  saveMortgage(db, [{
+    name: "Home loan",
+    propertyName: "Home",
+    propertyValueCents: 100_000_000,
+    balanceCents: 50_000_000,
+    interestRateBps: null,
+    repaymentCents: null,
+    rateType: "variable",
+    repaymentFrequency: "monthly",
+  }]);
   assert.equal(recurring.nextDueDate, "2026-10-15");
   assert.equal(monthEnd.nextDueDate, "2026-10-31");
   assert.equal(getPlannerUpcoming(db, new Date("2026-10-06T12:00:00")).length, 3);
+  assert.deepEqual(getDashboardData(db, new Date("2026-10-06T12:00:00")).propertyCoverage, [{
+    propertyName: "Home",
+    propertyValueCents: 100_000_000,
+    insuredValueCents: 85_000_000,
+    gapCents: 15_000_000,
+  }]);
   assert.equal(updatePlannerItem(db, oneOff.id, {
     kind: "insurance",
     name: "Updated policy",
     provider: "New insurer",
     amountCents: 125000,
+    propertyName: "Home",
+    insuredValueCents: 85_000_000,
     dueDate: "2026-12-15",
     recurrence: "yearly",
     notes: "Updated",
   })?.name, "Updated policy");
   assert.equal(deletePlannerItem(db, oneOff.id), true);
   assert.equal(deletePlannerItem(db, oneOff.id), false);
+  db.close();
+});
+
+test("dashboard compares building cover with each named property value", () => {
+  const db = createDatabase(":memory:");
+  saveMortgage(db, [
+    {
+      name: "Home variable split",
+      propertyName: "12 Smith Street",
+      propertyValueCents: 100_000_000,
+      balanceCents: 40_000_000,
+      interestRateBps: null,
+      repaymentCents: null,
+      rateType: "variable",
+      repaymentFrequency: "monthly",
+    },
+    {
+      name: "Home fixed split",
+      propertyName: "12 Smith Street",
+      propertyValueCents: 100_000_000,
+      balanceCents: 20_000_000,
+      interestRateBps: null,
+      repaymentCents: null,
+      rateType: "fixed",
+      repaymentFrequency: "monthly",
+    },
+    {
+      name: "Unit loan",
+      propertyName: "Unit 4",
+      propertyValueCents: 50_000_000,
+      balanceCents: 30_000_000,
+      interestRateBps: null,
+      repaymentCents: null,
+      rateType: "variable",
+      repaymentFrequency: "monthly",
+    },
+  ]);
+  for (const policy of [
+    { name: "House cover", propertyName: "12 Smith Street", insuredValueCents: 85_000_000 },
+    { name: "Unit cover", propertyName: "Unit 4", insuredValueCents: 60_000_000 },
+  ]) {
+    createPlannerItem(db, {
+      kind: "insurance",
+      name: policy.name,
+      provider: "Insurer",
+      amountCents: 100_000,
+      propertyName: policy.propertyName,
+      insuredValueCents: policy.insuredValueCents,
+      dueDate: "2026-12-01",
+      recurrence: "yearly",
+      notes: "",
+    });
+  }
+
+  assert.deepEqual(getDashboardData(db).propertyCoverage, [
+    { propertyName: "12 Smith Street", propertyValueCents: 100_000_000, insuredValueCents: 85_000_000, gapCents: 15_000_000 },
+    { propertyName: "Unit 4", propertyValueCents: 50_000_000, insuredValueCents: 60_000_000, gapCents: -10_000_000 },
+  ]);
+  assert.throws(() => saveMortgage(db, [
+    {
+      name: "Conflicting split one",
+      propertyName: "Same Home",
+      propertyValueCents: 50_000_000,
+      balanceCents: 1,
+      interestRateBps: null,
+      repaymentCents: null,
+      rateType: "variable",
+      repaymentFrequency: "monthly",
+    },
+    {
+      name: "Conflicting split two",
+      propertyName: "same home",
+      propertyValueCents: 55_000_000,
+      balanceCents: 1,
+      interestRateBps: null,
+      repaymentCents: null,
+      rateType: "variable",
+      repaymentFrequency: "monthly",
+    },
+  ]), /same property value/);
   db.close();
 });
 

@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 const backupTables = {
   provider: ["id", "name", "type", "is_mock"],
   financial_account: ["id", "provider_id", "name", "type", "balance_cents", "is_mock", "institution", "bsb", "account_number", "website_url"],
-  mortgage: ["id", "name", "balance_cents", "is_mock", "interest_rate_bps", "repayment_cents", "rate_type", "repayment_frequency", "updated_at"],
+  mortgage: ["id", "name", "balance_cents", "is_mock", "interest_rate_bps", "repayment_cents", "property_name", "property_value_cents", "rate_type", "repayment_frequency", "updated_at"],
   personal_loan: ["id", "name", "lender", "type", "balance_cents", "interest_rate_bps", "repayment_cents", "repayment_frequency", "updated_at"],
   monthly_summary: ["month", "income_cents", "spending_cents", "is_mock"],
   upcoming_item: ["id", "title", "due_date", "amount_cents", "kind", "is_mock"],
@@ -11,7 +11,7 @@ const backupTables = {
   finance_entry: ["id", "kind", "amount_cents", "category", "description", "entry_date"],
   recurring_income: ["id", "amount_cents", "category", "description", "next_date", "recurrence"],
   budget_plan: ["id", "category", "limit_cents"],
-  planner_item: ["id", "kind", "name", "provider", "amount_cents", "due_date", "recurrence", "notes"],
+  planner_item: ["id", "kind", "name", "provider", "amount_cents", "due_date", "recurrence", "notes", "property_name", "insured_value_cents"],
   app_setting: ["key", "value"],
 } as const;
 
@@ -69,6 +69,16 @@ export function restoreBackup(db: Database.Database, value: unknown): void {
     if (table === "financial_account" && Array.isArray(rows)) {
       tables[table] = rows.map((row) =>
         isRecord(row) ? { bsb: "", account_number: "", website_url: "", ...row } : row,
+      );
+    }
+    if (table === "mortgage" && Array.isArray(rows)) {
+      tables[table] = rows.map((row) =>
+        isRecord(row) ? { property_name: "Home", property_value_cents: 0, ...row } : row,
+      );
+    }
+    if (table === "planner_item" && Array.isArray(rows)) {
+      tables[table] = rows.map((row) =>
+        isRecord(row) ? { property_name: "Home", insured_value_cents: 0, ...row } : row,
       );
     }
     const checkedRows = tables[table] ?? rows;

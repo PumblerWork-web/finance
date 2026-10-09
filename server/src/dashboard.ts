@@ -20,6 +20,12 @@ export interface DashboardData {
   offsetCents: number;
   superCents: number;
   mortgageCents: number;
+  propertyCoverage: Array<{
+    propertyName: string;
+    propertyValueCents: number;
+    insuredValueCents: number;
+    gapCents: number;
+  }>;
   otherLoanCents: number;
   monthlyIncomeCents: number;
   monthlySpendingCents: number;
@@ -58,6 +64,36 @@ export function getDashboardData(db: Database.Database, now = new Date()): Dashb
   const otherLoanCents = (db
     .prepare("SELECT COALESCE(SUM(balance_cents), 0) AS balanceCents FROM personal_loan")
     .get() as { balanceCents: number }).balanceCents;
+  const coverageByProperty = new Map<string, DashboardData["propertyCoverage"][number]>();
+  const mortgageProperties = db.prepare(
+    `SELECT property_name AS propertyName, MAX(property_value_cents) AS propertyValueCents
+     FROM mortgage WHERE is_mock = 0 GROUP BY lower(property_name)`,
+  ).all() as Array<{ propertyName: string; propertyValueCents: number }>;
+  for (const property of mortgageProperties) {
+    const key = property.propertyName.trim().toLocaleLowerCase();
+    coverageByProperty.set(key, {
+      propertyName: property.propertyName,
+      propertyValueCents: property.propertyValueCents,
+      insuredValueCents: 0,
+      gapCents: property.propertyValueCents,
+    });
+  }
+  const insuredProperties = db.prepare(
+    `SELECT property_name AS propertyName, SUM(insured_value_cents) AS insuredValueCents
+     FROM planner_item WHERE kind = 'insurance' GROUP BY lower(property_name)`,
+  ).all() as Array<{ propertyName: string; insuredValueCents: number }>;
+  for (const property of insuredProperties) {
+    const key = property.propertyName.trim().toLocaleLowerCase();
+    const coverage = coverageByProperty.get(key) ?? {
+      propertyName: property.propertyName,
+      propertyValueCents: 0,
+      insuredValueCents: 0,
+      gapCents: 0,
+    };
+    coverage.insuredValueCents = property.insuredValueCents;
+    coverage.gapCents = coverage.propertyValueCents - coverage.insuredValueCents;
+    coverageByProperty.set(key, coverage);
+  }
   const personalDataPresent = Boolean(
     (
       db.prepare(`
@@ -108,6 +144,9 @@ export function getDashboardData(db: Database.Database, now = new Date()): Dashb
     offsetCents,
     superCents,
     mortgageCents,
+    propertyCoverage: [...coverageByProperty.values()].filter((property) =>
+      property.propertyValueCents > 0 || property.insuredValueCents > 0,
+    ),
     otherLoanCents,
     monthlyIncomeCents: (monthly?.incomeCents ?? 0) + recurringIncomeForMonth(db, currentMonth),
     monthlySpendingCents: monthly?.spendingCents ?? 0,

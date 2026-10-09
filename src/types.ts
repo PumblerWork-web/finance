@@ -16,6 +16,12 @@ export interface DashboardData {
   offsetCents: number;
   superCents: number;
   mortgageCents: number;
+  propertyCoverage: Array<{
+    propertyName: string;
+    propertyValueCents: number;
+    insuredValueCents: number;
+    gapCents: number;
+  }>;
   otherLoanCents: number;
   monthlyIncomeCents: number;
   monthlySpendingCents: number;
@@ -48,6 +54,8 @@ export interface FinancialAccount {
 export interface MortgageSplit {
   id: number;
   name: string;
+  propertyName: string;
+  propertyValueCents: number;
   balanceCents: number;
   interestRateBps: number | null;
   repaymentCents: number | null;
@@ -114,6 +122,8 @@ export interface PlannerItem {
   dueDate: string;
   recurrence: Recurrence;
   notes: string;
+  propertyName: string;
+  insuredValueCents: number;
   nextDueDate: string;
 }
 

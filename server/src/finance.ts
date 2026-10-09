@@ -55,10 +55,15 @@ export interface PlannerItem {
   dueDate: string;
   recurrence: Recurrence;
   notes: string;
+  propertyName: string;
+  insuredValueCents: number;
   nextDueDate: string;
 }
 
-export type PlannerItemInput = Omit<PlannerItem, "id" | "nextDueDate">;
+export type PlannerItemInput = Omit<PlannerItem, "id" | "nextDueDate" | "propertyName" | "insuredValueCents"> & {
+  propertyName?: string;
+  insuredValueCents?: number;
+};
 
 export interface FinanceReport {
   monthly: Array<{ month: string; incomeCents: number; spendingCents: number }>;
@@ -289,8 +294,8 @@ export function listPlannerItems(
   now = new Date(),
 ): PlannerItem[] {
   return (db.prepare(
-    `SELECT id, kind, name, provider, amount_cents AS amountCents, due_date AS dueDate,
-            recurrence, notes
+        `SELECT id, kind, name, provider, amount_cents AS amountCents, due_date AS dueDate,
+          recurrence, notes, property_name AS propertyName, insured_value_cents AS insuredValueCents
      FROM planner_item WHERE kind = ? ORDER BY due_date, name COLLATE NOCASE`,
   ).all(kind) as Omit<PlannerItem, "nextDueDate">[]).map((item) => ({
     ...item,
@@ -301,11 +306,12 @@ export function listPlannerItems(
 export function createPlannerItem(db: Database.Database, input: PlannerItemInput): PlannerItem {
   validatePlannerItem(input);
   const result = db.prepare(
-    `INSERT INTO planner_item (kind, name, provider, amount_cents, due_date, recurrence, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).run(input.kind, input.name.trim(), input.provider.trim(), input.amountCents, input.dueDate, input.recurrence, input.notes.trim());
+    `INSERT INTO planner_item (kind, name, provider, amount_cents, due_date, recurrence, notes, property_name, insured_value_cents)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(input.kind, input.name.trim(), input.provider.trim(), input.amountCents, input.dueDate, input.recurrence, input.notes.trim(), input.propertyName?.trim() || "Home", input.insuredValueCents ?? 0);
   const item = db.prepare(
-    `SELECT id, kind, name, provider, amount_cents AS amountCents, due_date AS dueDate, recurrence, notes
+    `SELECT id, kind, name, provider, amount_cents AS amountCents, due_date AS dueDate, recurrence, notes,
+            property_name AS propertyName, insured_value_cents AS insuredValueCents
      FROM planner_item WHERE id = ?`,
   ).get(result.lastInsertRowid) as Omit<PlannerItem, "nextDueDate">;
   return { ...item, nextDueDate: nextDueDate(item.dueDate, item.recurrence, new Date()) };
@@ -314,12 +320,13 @@ export function createPlannerItem(db: Database.Database, input: PlannerItemInput
 export function updatePlannerItem(db: Database.Database, id: number, input: PlannerItemInput): PlannerItem | null {
   validatePlannerItem(input);
   const result = db.prepare(
-    `UPDATE planner_item SET kind = ?, name = ?, provider = ?, amount_cents = ?, due_date = ?, recurrence = ?, notes = ?
+    `UPDATE planner_item SET kind = ?, name = ?, provider = ?, amount_cents = ?, due_date = ?, recurrence = ?, notes = ?, property_name = ?, insured_value_cents = ?
      WHERE id = ?`,
-  ).run(input.kind, input.name.trim(), input.provider.trim(), input.amountCents, input.dueDate, input.recurrence, input.notes.trim(), id);
+  ).run(input.kind, input.name.trim(), input.provider.trim(), input.amountCents, input.dueDate, input.recurrence, input.notes.trim(), input.propertyName?.trim() || "Home", input.insuredValueCents ?? 0, id);
   if (!result.changes) return null;
   const item = db.prepare(
-    `SELECT id, kind, name, provider, amount_cents AS amountCents, due_date AS dueDate, recurrence, notes
+        `SELECT id, kind, name, provider, amount_cents AS amountCents, due_date AS dueDate, recurrence, notes,
+          property_name AS propertyName, insured_value_cents AS insuredValueCents
      FROM planner_item WHERE id = ?`,
   ).get(id) as Omit<PlannerItem, "nextDueDate">;
   return { ...item, nextDueDate: nextDueDate(item.dueDate, item.recurrence, new Date()) };
@@ -344,6 +351,16 @@ function validatePlannerItem(input: PlannerItemInput): void {
   }
   if (typeof input.notes !== "string" || input.notes.length > 300) {
     throw new Error("Notes must be 300 characters or fewer.");
+  }
+  if (input.kind === "insurance") {
+    const propertyName = input.propertyName ?? "Home";
+    const insuredValueCents = input.insuredValueCents ?? 0;
+    if (typeof propertyName !== "string" || !propertyName.trim() || propertyName.trim().length > 80) {
+      throw new Error("Enter a property name of up to 80 characters.");
+    }
+    if (!Number.isSafeInteger(insuredValueCents) || insuredValueCents <= 0 || insuredValueCents > 100_000_000_000) {
+      throw new Error("Enter an insured amount greater than $0 and up to $1 billion.");
+    }
   }
 }
 

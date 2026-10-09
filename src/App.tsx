@@ -247,6 +247,7 @@ export default function App() {
               mortgageIsMock: false,
               netPositionCents: current.netPositionCents + current.mortgageCents - mortgageCents,
             } : current);
+            void refreshDashboardData();
           }} />
         ) : activePage === "Loans" ? (
           <LoansPage onSaved={refreshDashboardData} />
@@ -484,6 +485,34 @@ function Dashboard({
         <MetricCard icon={CreditCard} title="Spending" amount={data.monthlySpendingCents} note="This month" tone="rose" />
         <MetricCard icon={ChartNoAxesCombined} title="Surplus" amount={data.monthlySurplusCents} note="This month" tone="mint" />
       </section>
+
+      {data.propertyCoverage.length > 0 && <section className="panel property-coverage-panel">
+        <div className="panel-heading"><div><h2>Home insurance check</h2><p>Building cover compared with your entered property value. Rebuild costs and policy limits may differ.</p></div></div>
+        <div className="property-coverage-list">{data.propertyCoverage.map((property) => {
+          const coveredRatio = property.propertyValueCents > 0
+            ? property.insuredValueCents / property.propertyValueCents
+            : 0;
+          const status = property.propertyValueCents === 0
+            ? "missing-value"
+            : property.insuredValueCents === 0
+              ? "uninsured"
+              : property.gapCents > 0
+                ? "underinsured"
+                : property.gapCents < 0
+                  ? "overinsured"
+                  : "matched";
+          const statusLabel = status === "missing-value" ? "Add property value"
+            : status === "uninsured" ? "No cover recorded"
+              : status === "underinsured" ? `Under by ${formatMoney(property.gapCents)}`
+                : status === "overinsured" ? `Over by ${formatMoney(Math.abs(property.gapCents))}`
+                  : "Cover matches value";
+          return <article className="property-coverage-row" key={property.propertyName}>
+            <div className="property-coverage-name"><strong>{property.propertyName}</strong><span className={`coverage-status ${status}`}>{statusLabel}</span></div>
+            <div className="property-coverage-amounts"><span>Property value <strong>{property.propertyValueCents ? formatMoney(property.propertyValueCents) : "Not set"}</strong></span><span>Building cover <strong>{property.insuredValueCents ? formatMoney(property.insuredValueCents) : "Not set"}</strong></span></div>
+            {property.propertyValueCents > 0 && <div className="coverage-track"><span className={status} style={{ width: `${Math.min(100, coveredRatio * 100)}%` }} /></div>}
+          </article>;
+        })}</div>
+      </section>}
 
       <section className="content-grid">
         <div className="panel trend-panel">
@@ -1204,10 +1233,12 @@ interface PlannerDraft {
   dueDate: string;
   recurrence: Recurrence;
   notes: string;
+  propertyName: string;
+  insuredAmount: string;
 }
 
 function emptyPlannerDraft(kind: PlannerKind): PlannerDraft {
-  return { kind, name: "", provider: "", amount: "", dueDate: todayInputDate(), recurrence: "none", notes: "" };
+  return { kind, name: "", provider: "", amount: "", dueDate: todayInputDate(), recurrence: "none", notes: "", propertyName: "Home", insuredAmount: "" };
 }
 
 function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => Promise<void> }) {
@@ -1243,6 +1274,7 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
     const payload: PlannerItemInput = {
       ...draft,
       amountCents: Math.round(Number(draft.amount) * 100),
+      insuredValueCents: kind === "insurance" ? Math.round(Number(draft.insuredAmount) * 100) : 0,
     };
     try {
       if (editingId === null) await api.createPlannerItem(payload);
@@ -1282,6 +1314,8 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
       dueDate: item.nextDueDate,
       recurrence: item.recurrence,
       notes: item.notes,
+      propertyName: item.propertyName,
+      insuredAmount: item.insuredValueCents ? (item.insuredValueCents / 100).toFixed(2) : "",
     });
   }
 
@@ -1293,7 +1327,11 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
         <form className="finance-entry-form" onSubmit={submit}>
           <label>Name<input maxLength={100} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder={kind === "bill" ? "e.g. Electricity" : "e.g. Home insurance"} required value={draft.name} /></label>
           <label>{kind === "bill" ? "Provider (optional)" : "Insurer"}<input maxLength={100} onChange={(event) => setDraft((current) => ({ ...current, provider: event.target.value }))} value={draft.provider} /></label>
-          <label>Amount (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0.01" onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))} required step="0.01" type="number" value={draft.amount} /></span></label>
+          <label>{kind === "bill" ? "Amount (AUD)" : "Premium (AUD)"}<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0.01" onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))} required step="0.01" type="number" value={draft.amount} /></span></label>
+          {kind === "insurance" && <>
+            <label>Property or home<input maxLength={80} onChange={(event) => setDraft((current) => ({ ...current, propertyName: event.target.value }))} placeholder="e.g. 12 Smith Street" required value={draft.propertyName} /></label>
+            <label>Building cover (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0.01" onChange={(event) => setDraft((current) => ({ ...current, insuredAmount: event.target.value }))} required step="0.01" type="number" value={draft.insuredAmount} /></span></label>
+          </>}
           <label>Next due date<input onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} required type="date" value={draft.dueDate} /></label>
           <label>Recurrence<select onChange={(event) => setDraft((current) => ({ ...current, recurrence: event.target.value as Recurrence }))} value={draft.recurrence}>
             <option value="none">One-off</option><option value="weekly">Weekly</option><option value="fortnightly">Fortnightly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option>
@@ -1310,7 +1348,7 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
           <div className="finance-entry-list">{items.map((item) => (
             <article className="finance-entry-row" key={item.id}>
               <div className="finance-entry-date">{formatDate(item.nextDueDate, { year: "numeric" })}</div>
-              <div className="finance-entry-details"><strong>{item.name}</strong><span>{[item.provider, item.recurrence === "none" ? "One-off" : ({ weekly: "Weekly", fortnightly: "Fortnightly", monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly", none: "One-off" }[item.recurrence])].filter(Boolean).join(" · ")}{item.notes ? ` · ${item.notes}` : ""}</span></div>
+                <div className="finance-entry-details"><strong>{item.name}</strong><span>{[item.provider, item.recurrence === "none" ? "One-off" : ({ weekly: "Weekly", fortnightly: "Fortnightly", monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly", none: "One-off" }[item.recurrence])].filter(Boolean).join(" · ")}{kind === "insurance" ? ` · ${item.propertyName} · Cover ${formatMoney(item.insuredValueCents)}` : ""}{item.notes ? ` · ${item.notes}` : ""}</span></div>
               <strong className="finance-entry-amount">{formatMoney(item.amountCents)}</strong>
               <button className="account-delete-button" onClick={() => editItem(item)} type="button">Edit</button>
               <button className="account-delete-button" onClick={() => void removeItem(item)} type="button">Delete</button>
@@ -1585,6 +1623,8 @@ function LoansPage({ onSaved }: { onSaved: () => Promise<void> }) {
 
 interface MortgageSplitDraft {
   name: string;
+  propertyName: string;
+  propertyValue: string;
   balance: string;
   interestRate: string;
   repayment: string;
@@ -1595,6 +1635,8 @@ interface MortgageSplitDraft {
 function newMortgageSplit(index: number): MortgageSplitDraft {
   return {
     name: `Loan split ${index + 1}`,
+    propertyName: "Home",
+    propertyValue: "",
     balance: "",
     interestRate: "",
     repayment: "",
@@ -1618,6 +1660,8 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
         setLoans(mortgages.length
           ? mortgages.map((mortgage) => ({
             name: mortgage.name,
+            propertyName: mortgage.propertyName,
+            propertyValue: mortgage.propertyValueCents ? (mortgage.propertyValueCents / 100).toFixed(2) : "",
             balance: (mortgage.balanceCents / 100).toFixed(2),
             interestRate: mortgage.interestRateBps === null ? "" : (mortgage.interestRateBps / 100).toFixed(2),
             repayment: mortgage.repaymentCents === null ? "" : (mortgage.repaymentCents / 100).toFixed(2),
@@ -1640,6 +1684,8 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
     try {
       const mortgages = await api.saveMortgage(loans.map((loan) => ({
         name: loan.name,
+        propertyName: loan.propertyName,
+        propertyValueCents: Math.round(Number(loan.propertyValue) * 100),
         balanceCents: Math.round(Number(loan.balance) * 100),
         interestRateBps: loan.interestRate === "" ? null : Math.round(Number(loan.interestRate) * 100),
         repaymentCents: loan.repayment === "" ? null : Math.round(Number(loan.repayment) * 100),
@@ -1662,13 +1708,13 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
         <div>
           <div className="eyebrow">YOUR HOME LOAN</div>
           <h1>Mortgage</h1>
-          <p className="welcome-subtitle">Keep your ME home-loan balance and repayment details up to date.</p>
+          <p className="welcome-subtitle">Keep your home-loan splits and property values up to date.</p>
         </div>
       </div>
       <section className="panel mortgage-panel">
         <div className="mortgage-notice">
           <LockKeyhole size={17} />
-          <p><strong>Manual entry only</strong><span>Add a split for each separate amount in your ME loan. This does not connect to ME Bank; never enter your banking password here.</span></p>
+          <p><strong>Manual entry only</strong><span>Enter the property name and value for each split. Use the same name and value for splits on one home, then reuse its name for the insurance policy.</span></p>
         </div>
         {loading ? <p className="mortgage-status">Loading saved loan details…</p> : (
           <form className="mortgage-form" onSubmit={submit}>
@@ -1679,6 +1725,14 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
                 <label>
                   Split name
                   <input maxLength={80} onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} required value={loan.name} />
+                </label>
+                <label>
+                  Property or home
+                  <input maxLength={80} onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, propertyName: event.target.value } : item))} placeholder="e.g. 12 Smith Street" required value={loan.propertyName} />
+                </label>
+                <label>
+                  Property value (AUD)
+                  <span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0" onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, propertyValue: event.target.value } : item))} placeholder="Current property value" required step="0.01" type="number" value={loan.propertyValue} /></span>
                 </label>
                 <label>
                   Loan balance (AUD)

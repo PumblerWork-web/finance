@@ -440,6 +440,8 @@ app.put("/api/mortgage", requireAuth, (req, res, next) => {
       const split = loan as Record<string, unknown>;
       if (
         typeof split.name !== "string" ||
+        (split.propertyName !== undefined && typeof split.propertyName !== "string") ||
+        (split.propertyValueCents !== undefined && typeof split.propertyValueCents !== "number") ||
         typeof split.balanceCents !== "number" ||
         (split.interestRateBps !== null && typeof split.interestRateBps !== "number") ||
         (split.repaymentCents !== null && typeof split.repaymentCents !== "number") ||
@@ -452,6 +454,8 @@ app.put("/api/mortgage", requireAuth, (req, res, next) => {
       }
       return {
         name: split.name,
+        propertyName: split.propertyName as string | undefined,
+        propertyValueCents: split.propertyValueCents as number | undefined,
         balanceCents: split.balanceCents,
         interestRateBps: split.interestRateBps,
         repaymentCents: split.repaymentCents,
@@ -623,7 +627,9 @@ function parsePlannerItem(value: unknown): PlannerItemInput {
     typeof item.amountCents !== "number" ||
     typeof item.dueDate !== "string" ||
     typeof item.recurrence !== "string" ||
-    typeof item.notes !== "string"
+    typeof item.notes !== "string" ||
+    (item.propertyName !== undefined && typeof item.propertyName !== "string") ||
+    (item.insuredValueCents !== undefined && typeof item.insuredValueCents !== "number")
   ) {
     throw new Error("Enter valid item details.");
   }
@@ -635,6 +641,8 @@ function parsePlannerItem(value: unknown): PlannerItemInput {
     dueDate: item.dueDate,
     recurrence: item.recurrence as Recurrence,
     notes: item.notes,
+    propertyName: item.propertyName as string | undefined,
+    insuredValueCents: item.insuredValueCents as number | undefined,
   };
 }
 
