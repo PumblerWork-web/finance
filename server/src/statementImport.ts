@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
 export type StatementDirection = "out" | "in" | "unknown";
+export type StatementDestination = "spending" | "income" | "bill";
 
 export interface StatementTransaction {
   date: string;
@@ -9,6 +10,7 @@ export interface StatementTransaction {
   amountCents: number;
   direction: StatementDirection;
   category: string;
+  destination: StatementDestination;
   possibleDuplicate: boolean;
 }
 
@@ -21,13 +23,41 @@ const CATEGORY_RULES: Array<[RegExp, string]> = [
   [/\bbp\b|shell|ampol|caltex|7-?eleven|united petrol|fuel|petrol/i, "Fuel"],
   [/mcdonald|kfc|hungry jack|domino|uber\s*eats|menulog|doordash|cafe|coffee|restaurant|bakery|pizza/i, "Dining out"],
   [/\buber\b|opal|myki|translink|parking|linkt|toll|taxi|ola\b/i, "Transport"],
-  [/\bagl\b|origin energy|energy ?australia|telstra|optus|vodafone|water|electricity|internet|nbn/i, "Bills"],
+  [/\bagl\b|origin energy|energy ?australia|telstra|optus|vodafone|water|electricity|internet|nbn|synergy|alinta|powershop|dodo|tpg|belong|aussie broadband|\bcouncil\b|city of|shire of|\brates\b|water corp|sydney water|yarra valley water|actewagl|ergon|energex|\bbill\b/i, "Bills"],
   [/pharmacy|chemist|priceline|medical|doctor|dental|physio|hospital/i, "Health"],
   [/netflix|spotify|disney|youtube|apple\.com|google|stan\.com|prime video/i, "Subscriptions"],
-  [/insurance|nrma|aami|allianz|medibank|bupa|hcf|youi/i, "Insurance"],
+  [/insurance|nrma|aami|allianz|medibank|bupa|hcf|youi|rac\b|raci\b|racv|racq|raa\b|hbf|nib\b/i, "Insurance"],
   [/kmart|target|big w|amazon|ebay|bunnings|jb hi-?fi|officeworks|ikea/i, "Shopping"],
   [/account fee|monthly fee|service fee|interest charge|overdrawn/i, "Bank fees"],
 ];
+
+export const DEPOSIT_KEYWORD_PATTERN = /\b(?:deposit|salary|payroll|pay\/salary|direct credit|tfr from|transfer from|osko (?:from|payment from)|credit|refund|rebate|interest (?:paid|credit))\b/i;
+export const WITHDRAWAL_KEYWORD_PATTERN = /\b(?:withdrawal|debit|direct debit|payment (?:to|by)|bpay|pos purchase|visa purchase|eftpos|atm|transfer to|tfr to)\b/i;
+
+export function extractBillDetails(description: string): { name: string; provider: string } {
+  let cleaned = description
+    .replace(/^WITHDRAWAL\s+(?:ONLINE|MOBILE|MERCHANT)?\s*\d*\s*/i, "")
+    .replace(/^PAYMENT\s+(?:BY\s+AUTHORITY\s+TO|TO)?\s*/i, "")
+    .replace(/^BPAY\s+/i, "")
+    .replace(/\s+\d{6,}$/i, "")
+    .trim();
+  if (!cleaned) cleaned = description.trim();
+
+  let provider = "";
+  if (/optus/i.test(cleaned)) provider = "Optus";
+  else if (/telstra/i.test(cleaned)) provider = "Telstra";
+  else if (/vodafone/i.test(cleaned)) provider = "Vodafone";
+  else if (/synergy/i.test(cleaned)) provider = "Synergy";
+  else if (/alinta/i.test(cleaned)) provider = "Alinta Energy";
+  else if (/agl/i.test(cleaned)) provider = "AGL";
+  else if (/origin/i.test(cleaned)) provider = "Origin Energy";
+  else if (/water/i.test(cleaned)) provider = "Water Corporation";
+  else if (/kwinana/i.test(cleaned)) provider = "City of Kwinana";
+  else if (/raci?|rac\b/i.test(cleaned)) provider = "RAC";
+  else provider = cleaned.split(/\s+/)[0] || "Bill";
+
+  return { name: cleaned, provider };
+}
 
 export function guessCategory(description: string): string {
   return CATEGORY_RULES.find(([pattern]) => pattern.test(description))?.[1] ?? "Other";
@@ -176,24 +206,41 @@ export function parseStatementText(text: string, now = new Date()): Array<Omit<S
         if (change !== 0) direction = change < 0 ? "out" : "in";
       }
     }
+    if (direction === "unknown") {
+      if (DEPOSIT_KEYWORD_PATTERN.test(row.description)) direction = "in";
+      else if (WITHDRAWAL_KEYWORD_PATTERN.test(row.description)) direction = "out";
+    }
+    const isDeposit = direction === "in" || DEPOSIT_KEYWORD_PATTERN.test(row.description);
+    const category = isDeposit ? "Income" : guessCategory(row.description);
+    const isBill = !isDeposit && (category === "Bills" || /\bbill\b|\bbpay\b|\belectricity\b|\bwater\b|\bgas\b|\benergy\b|\brates\b/i.test(row.description));
+    const destination: StatementDestination = isDeposit ? "income" : isBill ? "bill" : "spending";
+
     result.push({
       date: row.date,
       description: row.description.slice(0, 200),
       amountCents: row.amount.cents,
-      direction,
-      category: direction === "in" ? "Income" : guessCategory(row.description),
+      direction: isDeposit ? "in" : direction,
+      category,
+      destination,
     });
   });
   return result;
 }
 
 export function previewStatement(db: Database.Database, text: string, now = new Date()): StatementTransaction[] {
-  const existing = db.prepare(
+  const existingEntries = db.prepare(
     "SELECT kind, entry_date AS date, amount_cents AS cents FROM finance_entry",
   ).all() as Array<{ kind: string; date: string; cents: number }>;
-  const seen = new Set(existing.map((entry) => `${entry.kind}|${entry.date}|${entry.cents}`));
-  return parseStatementText(text, now).map((transaction) => ({
-    ...transaction,
-    possibleDuplicate: seen.has(`${transaction.direction === "in" ? "income" : "spending"}|${transaction.date}|${transaction.amountCents}`),
-  }));
+  const existingBills = db.prepare(
+    "SELECT 'bill' AS kind, due_date AS date, amount_cents AS cents FROM planner_item WHERE kind = 'bill'",
+  ).all() as Array<{ kind: string; date: string; cents: number }>;
+  const seen = new Set([...existingEntries, ...existingBills].map((entry) => `${entry.kind}|${entry.date}|${entry.cents}`));
+
+  return parseStatementText(text, now).map((transaction) => {
+    const expectedKind = transaction.destination === "bill" ? "bill" : transaction.destination === "income" ? "income" : "spending";
+    return {
+      ...transaction,
+      possibleDuplicate: seen.has(`${expectedKind}|${transaction.date}|${transaction.amountCents}`),
+    };
+  });
 }

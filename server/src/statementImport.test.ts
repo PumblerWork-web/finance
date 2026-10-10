@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createDatabase } from "./database";
 import { importEntries, listEntries } from "./finance";
-import { guessCategory, parseStatementText, previewStatement } from "./statementImport";
+import { extractBillDetails, guessCategory, parseStatementText, previewStatement } from "./statementImport";
 
 const NOW = new Date("2026-10-10T00:00:00Z");
 
@@ -51,4 +51,40 @@ test("statement preview flags duplicates and bulk import saves spending", () => 
   assert.equal(listEntries(db, "spending").length, 1);
   assert.equal(guessCategory("Mystery shop"), "Other");
   db.close();
+});
+
+test("statement parser recognizes deposits and sets destination to income", () => {
+  const text = [
+    "05/10/2026 DEPOSIT ONLINE 2461520 TFR Carly PT payment 80.00",
+    "06/10/2026 DIRECT CREDIT SALARY 1,500.00",
+  ].join("\n");
+  const rows = parseStatementText(text, NOW);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].direction, "in");
+  assert.equal(rows[0].destination, "income");
+  assert.equal(rows[0].category, "Income");
+  assert.equal(rows[1].direction, "in");
+  assert.equal(rows[1].destination, "income");
+});
+
+test("statement parser identifies bills and extractBillDetails extracts provider", () => {
+  const text = [
+    "08/10/2026 WITHDRAWAL MOBILE 0280997 BPAY OPTUS BILL 250.00",
+    "08/10/2026 WITHDRAWAL ONLINE 1223412 BPAY SYNERGY 150.00",
+    "08/10/2026 WITHDRAWAL ONLINE 6063256 BPAY Alinta Sal 50.00",
+  ].join("\n");
+  const rows = parseStatementText(text, NOW);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].destination, "bill");
+  assert.equal(rows[0].category, "Bills");
+  assert.equal(rows[1].destination, "bill");
+  assert.equal(rows[2].destination, "bill");
+
+  const detailsOptus = extractBillDetails(rows[0].description);
+  assert.equal(detailsOptus.provider, "Optus");
+  assert.equal(detailsOptus.name, "OPTUS BILL");
+
+  const detailsSynergy = extractBillDetails(rows[1].description);
+  assert.equal(detailsSynergy.provider, "Synergy");
+  assert.equal(detailsSynergy.name, "SYNERGY");
 });

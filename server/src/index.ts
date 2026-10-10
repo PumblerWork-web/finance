@@ -255,13 +255,47 @@ app.post("/api/entries/import-pdf", requireAuth, async (req, res, next) => {
 
 app.post("/api/entries/import", requireAuth, (req, res, next) => {
   try {
-    const body = req.body as { entries?: unknown };
-    if (!Array.isArray(body.entries)) throw new Error("Choose transactions to import.");
-    const imported = importEntries(db, body.entries.map((entry) => {
-      const kind = (entry as { kind?: unknown } | null)?.kind === "income" ? "income" : "spending";
-      return parseEntry({ ...(entry as object), kind });
-    }));
-    res.status(201).json({ imported });
+    const body = req.body as {
+      entries?: unknown;
+      bills?: unknown;
+    };
+    let imported = 0;
+    if (Array.isArray(body.entries) && body.entries.length > 0) {
+      imported = importEntries(db, body.entries.map((entry) => {
+        const kind = (entry as { kind?: unknown } | null)?.kind === "income" ? "income" : "spending";
+        return parseEntry({ ...(entry as object), kind });
+      }));
+    }
+    let importedBills = 0;
+    if (Array.isArray(body.bills) && body.bills.length > 0) {
+      for (const bill of body.bills) {
+        if (!bill || typeof (bill as { name?: unknown }).name !== "string") continue;
+        const b = bill as {
+          name: string;
+          provider?: string;
+          amountCents: number;
+          dueDate: string;
+          recurrence?: Recurrence;
+          notes?: string;
+        };
+        createPlannerItem(db, {
+          kind: "bill",
+          name: b.name.trim().slice(0, 100),
+          provider: (b.provider ?? "Bill").trim().slice(0, 100),
+          amountCents: Math.round(Number(b.amountCents)),
+          dueDate: b.dueDate,
+          recurrence: (b.recurrence && ["none", "weekly", "fortnightly", "monthly", "quarterly", "yearly"].includes(b.recurrence))
+            ? b.recurrence
+            : "monthly",
+          notes: (b.notes ?? "").slice(0, 300),
+        });
+        importedBills++;
+      }
+    }
+    if (imported === 0 && importedBills === 0) {
+      throw new Error("Choose transactions to import.");
+    }
+    res.status(201).json({ imported, importedBills });
   } catch (error) {
     if (error instanceof Error) {
       res.status(400).json({ error: error.message });

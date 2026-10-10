@@ -57,6 +57,7 @@ import type {
   PolicyType,
   RecurringIncome,
   Recurrence,
+  StatementDestination,
   StatementTransaction,
 } from "./types";
 
@@ -1076,6 +1077,31 @@ function todayInputDate(): string {
 
 type ImportRow = StatementTransaction & { selected: boolean };
 
+function extractBillDetails(description: string): { name: string; provider: string } {
+  let cleaned = description
+    .replace(/^WITHDRAWAL\s+(?:ONLINE|MOBILE|MERCHANT)?\s*\d*\s*/i, "")
+    .replace(/^PAYMENT\s+(?:BY\s+AUTHORITY\s+TO|TO)?\s*/i, "")
+    .replace(/^BPAY\s+/i, "")
+    .replace(/\s+\d{6,}$/i, "")
+    .trim();
+  if (!cleaned) cleaned = description.trim();
+
+  let provider = "";
+  if (/optus/i.test(cleaned)) provider = "Optus";
+  else if (/telstra/i.test(cleaned)) provider = "Telstra";
+  else if (/vodafone/i.test(cleaned)) provider = "Vodafone";
+  else if (/synergy/i.test(cleaned)) provider = "Synergy";
+  else if (/alinta/i.test(cleaned)) provider = "Alinta Energy";
+  else if (/agl/i.test(cleaned)) provider = "AGL";
+  else if (/origin/i.test(cleaned)) provider = "Origin Energy";
+  else if (/water/i.test(cleaned)) provider = "Water Corporation";
+  else if (/kwinana/i.test(cleaned)) provider = "City of Kwinana";
+  else if (/raci?|rac\b/i.test(cleaned)) provider = "RAC";
+  else provider = cleaned.split(/\s+/)[0] || "Bill";
+
+  return { name: cleaned, provider };
+}
+
 function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -1105,7 +1131,11 @@ function StatementImport({ onImported }: { onImported: () => Promise<void> }) {
         setRows(null);
         setError("No transactions were found in that PDF. Scanned or photographed statements can't be read - download the PDF from your bank's website instead.");
       } else {
-        setRows(transactions.map((row) => ({ ...row, selected: !row.possibleDuplicate })));
+        setRows(transactions.map((row) => ({
+          ...row,
+          destination: row.destination ?? (row.direction === "in" ? "income" : row.category === "Bills" ? "bill" : "spending"),
+          selected: !row.possibleDuplicate,
+        })));
       }
     } catch (reason) {
       setRows(null);
@@ -1125,15 +1155,43 @@ function StatementImport({ onImported }: { onImported: () => Promise<void> }) {
     setError("");
     setBusy(true);
     try {
-      const { imported } = await api.importEntries(chosen.map((row) => ({
-        kind: row.direction === "in" ? "income" as const : "spending" as const,
-        amountCents: row.amountCents,
-        category: row.category.trim() || "Other",
-        description: row.description.slice(0, 200),
-        entryDate: row.date,
-      })));
+      const entriesToImport = chosen
+        .filter((row) => row.destination === "spending" || row.destination === "income")
+        .map((row) => ({
+          kind: row.destination === "income" ? ("income" as const) : ("spending" as const),
+          amountCents: row.amountCents,
+          category: row.category.trim() || (row.destination === "income" ? "Income" : "Other"),
+          description: row.description.slice(0, 200),
+          entryDate: row.date,
+        }));
+
+      const billsToImport = chosen
+        .filter((row) => row.destination === "bill")
+        .map((row) => {
+          const { name, provider } = extractBillDetails(row.description);
+          return {
+            name: name || row.description.slice(0, 100),
+            provider: provider || "Bill",
+            amountCents: row.amountCents,
+            dueDate: row.date,
+            recurrence: "monthly" as const,
+            notes: row.description.slice(0, 200),
+          };
+        });
+
+      const { imported, importedBills = 0 } = await api.importEntries({
+        entries: entriesToImport,
+        bills: billsToImport,
+      });
+
       setRows(null);
-      setMessage(`Imported ${imported} ${imported === 1 ? "transaction" : "transactions"}: deposits went to Income, everything else to Spending.`);
+      const summaryParts: string[] = [];
+      const spendingCount = entriesToImport.filter((e) => e.kind === "spending").length;
+      const incomeCount = entriesToImport.filter((e) => e.kind === "income").length;
+      if (spendingCount > 0) summaryParts.push(`${spendingCount} to Spending`);
+      if (incomeCount > 0) summaryParts.push(`${incomeCount} deposits to Income`);
+      if (importedBills > 0) summaryParts.push(`${importedBills} bills moved to Bills tab`);
+      setMessage(`Imported: ${summaryParts.join(", ") || "Transactions saved"}.`);
       await onImported();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The transactions could not be imported.");
@@ -1147,7 +1205,10 @@ function StatementImport({ onImported }: { onImported: () => Promise<void> }) {
   return (
     <section className="panel statement-import">
       <div className="panel-heading">
-        <div><h2>Import from a bank statement PDF</h2><p>Deposits are saved as Income and withdrawals as Spending. The PDF is read on this computer only and is not saved. Check the list before importing - every bank lays out statements differently.</p></div>
+        <div>
+          <h2>Import from a bank statement PDF</h2>
+          <p>Deposits are saved as Income, bills move to the Bills tab, and withdrawals are saved as Spending. Check and adjust the destination for any transaction before importing.</p>
+        </div>
         <button className="secondary-button" disabled={busy} onClick={() => fileInput.current?.click()} type="button">{busy ? "Reading…" : "Choose PDF"}</button>
         <input accept="application/pdf,.pdf" hidden onChange={(event) => void choose(event)} ref={fileInput} type="file" />
       </div>
@@ -1157,13 +1218,36 @@ function StatementImport({ onImported }: { onImported: () => Promise<void> }) {
         <>
           <div className="statement-table-wrap">
             <table className="statement-table">
-              <thead><tr><th>Add</th><th>Date</th><th>Description</th><th>Category</th><th>Amount</th></tr></thead>
+              <thead><tr><th>Add</th><th>Date</th><th>Description</th><th>Destination</th><th>Category</th><th>Amount</th></tr></thead>
               <tbody>
                 {rows.map((row, index) => (
                   <tr className={row.selected ? "" : "statement-row-off"} key={index}>
                     <td><input aria-label={`Import ${row.description}`} checked={row.selected} onChange={(event) => update(index, { selected: event.target.checked })} type="checkbox" /></td>
                     <td>{formatDate(row.date, { year: "numeric" })}</td>
-                    <td>{row.description}{row.direction === "in" && <em> · deposit → Income</em>}{row.direction === "unknown" && <em> · check this one</em>}{row.possibleDuplicate && <em> · may already be saved</em>}</td>
+                    <td>
+                      <div>{row.description}</div>
+                      {row.destination === "income" && <em className="badge-income"> · deposit → Income</em>}
+                      {row.destination === "bill" && <em className="badge-bill"> · move to Bills tab</em>}
+                      {row.destination === "spending" && <em className="badge-spending"> · Spending</em>}
+                      {row.possibleDuplicate && <em> · may already be saved</em>}
+                    </td>
+                    <td>
+                      <select
+                        aria-label="Destination"
+                        value={row.destination}
+                        onChange={(event) => {
+                          const nextDest = event.target.value as StatementDestination;
+                          update(index, {
+                            destination: nextDest,
+                            category: nextDest === "income" ? "Income" : nextDest === "bill" ? "Bills" : row.category === "Income" ? "Other" : row.category,
+                          });
+                        }}
+                      >
+                        <option value="spending">Spending</option>
+                        <option value="income">Income (Deposit)</option>
+                        <option value="bill">Bills tab (Bill)</option>
+                      </select>
+                    </td>
                     <td><input aria-label="Category" maxLength={80} onChange={(event) => update(index, { category: event.target.value })} value={row.category} /></td>
                     <td>{formatMoney(row.amountCents)}</td>
                   </tr>

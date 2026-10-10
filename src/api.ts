@@ -91,10 +91,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ pdfBase64 }),
     }),
-  importEntries: (entries: FinanceEntryInput[]) =>
-    request<{ imported: number }>("/api/entries/import", {
+  importEntries: (payload: { entries?: FinanceEntryInput[]; bills?: Array<{ name: string; provider?: string; amountCents: number; dueDate: string; recurrence?: Recurrence; notes?: string }> } | FinanceEntryInput[]) =>
+    request<{ imported: number; importedBills?: number }>("/api/entries/import", {
       method: "POST",
-      body: JSON.stringify({ entries }),
+      body: JSON.stringify(Array.isArray(payload) ? { entries: payload } : payload),
     }),
   recurringIncome: () => request<RecurringIncome[]>("/api/recurring-income"),
   createRecurringIncome: (item: RecurringIncomeInput) =>

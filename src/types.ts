@@ -95,12 +95,15 @@ export interface FinanceEntry {
 
 export interface FinanceEntryInput extends Omit<FinanceEntry, "id"> {}
 
+export type StatementDestination = "spending" | "income" | "bill";
+
 export interface StatementTransaction {
   date: string;
   description: string;
   amountCents: number;
   direction: "out" | "in" | "unknown";
   category: string;
+  destination: StatementDestination;
   possibleDuplicate: boolean;
 }
 
