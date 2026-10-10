@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   ArrowDownRight,
   ArrowRight,
@@ -1910,6 +1910,7 @@ function LoansPage({ onSaved }: { onSaved: () => Promise<void> }) {
 }
 
 interface MortgageSplitDraft {
+  group: number;
   name: string;
   propertyName: string;
   propertyValue: string;
@@ -1921,11 +1922,12 @@ interface MortgageSplitDraft {
   repaymentFrequency: "weekly" | "fortnightly" | "monthly";
 }
 
-function newMortgageSplit(index: number): MortgageSplitDraft {
+function newMortgageSplit(index: number, group = 0, propertyName = "Home", propertyValue = ""): MortgageSplitDraft {
   return {
+    group,
     name: `Loan split ${index + 1}`,
-    propertyName: "Home",
-    propertyValue: "",
+    propertyName,
+    propertyValue,
     balance: "",
     interestRate: "",
     repayment: "",
@@ -1947,18 +1949,24 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
     api.mortgage()
       .then((mortgages) => {
         setSavedMortgages(mortgages);
+        const groupIds = new Map<string, number>();
         setLoans(mortgages.length
-          ? mortgages.map((mortgage) => ({
-            name: mortgage.name,
-            propertyName: mortgage.propertyName,
-            propertyValue: mortgage.propertyValueCents ? (mortgage.propertyValueCents / 100).toFixed(2) : "",
-            balance: (mortgage.balanceCents / 100).toFixed(2),
-            interestRate: mortgage.interestRateBps === null ? "" : (mortgage.interestRateBps / 100).toFixed(2),
-            repayment: mortgage.repaymentCents === null ? "" : (mortgage.repaymentCents / 100).toFixed(2),
-            rateType: mortgage.rateType,
-            fixedRateEndDate: mortgage.fixedRateEndDate,
-            repaymentFrequency: mortgage.repaymentFrequency,
-          }))
+          ? mortgages.map((mortgage) => {
+            const key = mortgage.propertyName.trim().toLocaleLowerCase();
+            if (!groupIds.has(key)) groupIds.set(key, groupIds.size);
+            return {
+              group: groupIds.get(key) ?? 0,
+              name: mortgage.name,
+              propertyName: mortgage.propertyName,
+              propertyValue: mortgage.propertyValueCents ? (mortgage.propertyValueCents / 100).toFixed(2) : "",
+              balance: (mortgage.balanceCents / 100).toFixed(2),
+              interestRate: mortgage.interestRateBps === null ? "" : (mortgage.interestRateBps / 100).toFixed(2),
+              repayment: mortgage.repaymentCents === null ? "" : (mortgage.repaymentCents / 100).toFixed(2),
+              rateType: mortgage.rateType,
+              fixedRateEndDate: mortgage.fixedRateEndDate,
+              repaymentFrequency: mortgage.repaymentFrequency,
+            };
+          }).sort((a, b) => a.group - b.group)
           : [newMortgageSplit(0)]);
       })
       .catch((reason: unknown) => {
@@ -1966,6 +1974,26 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
       })
       .finally(() => setLoading(false));
   }, []);
+
+  function addSplit(group: number) {
+    setLoans((current) => {
+      const members = current.filter((item) => item.group === group);
+      const last = current.lastIndexOf(members[members.length - 1]);
+      const added = newMortgageSplit(members.length, group, members[0].propertyName, members[0].propertyValue);
+      return [...current.slice(0, last + 1), added, ...current.slice(last + 1)];
+    });
+  }
+
+  function addMortgage() {
+    setLoans((current) => {
+      const group = Math.max(...current.map((item) => item.group)) + 1;
+      return [...current, newMortgageSplit(0, group, "", "")];
+    });
+  }
+
+  function patchGroup(group: number, change: Partial<MortgageSplitDraft>) {
+    setLoans((current) => current.map((item) => item.group === group ? { ...item, ...change } : item));
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2006,25 +2034,35 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
       <section className="panel mortgage-panel">
         <div className="mortgage-notice">
           <LockKeyhole size={17} />
-          <p><strong>Manual entry only</strong><span>Enter the property name and value for each split. Use the same name and value for splits on one home, then reuse its name for the insurance policy.</span></p>
+          <p><strong>Manual entry only</strong><span>Add a mortgage for each property, then a loan split for each part of that loan. Splits keep their own balance, rate and repayments, and the property name and value are shared by all splits on that mortgage. Reuse the property name for its insurance policy.</span></p>
         </div>
         {loading ? <p className="mortgage-status">Loading saved loan details…</p> : (
           <form className="mortgage-form" onSubmit={submit}>
-            {loans.map((loan, index) => (
-              <fieldset className="mortgage-split" key={index}>
-                <legend>Loan split {index + 1}</legend>
+            {loans.map((loan, index) => {
+              const firstInGroup = loans.findIndex((item) => item.group === loan.group) === index;
+              const lastInGroup = !loans.slice(index + 1).some((item) => item.group === loan.group);
+              const splitNumber = loans.slice(0, index).filter((item) => item.group === loan.group).length + 1;
+              return (
+              <Fragment key={index}>
+              {firstInGroup && (
+                <div className="mortgage-property">
+                  <h3>Mortgage {new Set(loans.slice(0, index + 1).map((item) => item.group)).size}</h3>
+                  <label>
+                    Property or home
+                    <input maxLength={80} onChange={(event) => patchGroup(loan.group, { propertyName: event.target.value })} placeholder="e.g. 12 Smith Street" required value={loan.propertyName} />
+                  </label>
+                  <label>
+                    Property value (AUD)
+                    <span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0" onChange={(event) => patchGroup(loan.group, { propertyValue: event.target.value })} placeholder="Current property value" required step="0.01" type="number" value={loan.propertyValue} /></span>
+                  </label>
+                </div>
+              )}
+              <fieldset className="mortgage-split">
+                <legend>Loan split {splitNumber}</legend>
                 <button className="remove-split-button" disabled={loans.length === 1} onClick={() => setLoans((current) => current.filter((_, itemIndex) => itemIndex !== index))} type="button">Remove</button>
                 <label>
                   Split name
                   <input maxLength={80} onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} required value={loan.name} />
-                </label>
-                <label>
-                  Property or home
-                  <input maxLength={80} onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, propertyName: event.target.value } : item))} placeholder="e.g. 12 Smith Street" required value={loan.propertyName} />
-                </label>
-                <label>
-                  Property value (AUD)
-                  <span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0" onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, propertyValue: event.target.value } : item))} placeholder="Current property value" required step="0.01" type="number" value={loan.propertyValue} /></span>
                 </label>
                 <label>
                   Loan balance (AUD)
@@ -2057,8 +2095,11 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
                   </select>
                 </label>
               </fieldset>
-            ))}
-            <button className="secondary-button add-split-button" onClick={() => setLoans((current) => [...current, newMortgageSplit(current.length)])} type="button">+ Add another loan split</button>
+              {lastInGroup && <button className="secondary-button add-split-button" onClick={() => addSplit(loan.group)} type="button">+ Add another loan split to this mortgage</button>}
+              </Fragment>
+              );
+            })}
+            <button className="secondary-button add-split-button" onClick={addMortgage} type="button">+ Add another mortgage (different property)</button>
             <div className="mortgage-total"><span>Total loan balance</span><strong>{formatMoney(loans.reduce((total, loan) => total + (Number(loan.balance) || 0) * 100, 0))}</strong></div>
             {error && <div className="form-error" role="alert">{error}</div>}
             {message && <div className="mortgage-success" role="status">{message}</div>}
