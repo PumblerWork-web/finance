@@ -257,7 +257,10 @@ app.post("/api/entries/import", requireAuth, (req, res, next) => {
   try {
     const body = req.body as { entries?: unknown };
     if (!Array.isArray(body.entries)) throw new Error("Choose transactions to import.");
-    const imported = importEntries(db, body.entries.map((entry) => parseEntry({ ...(entry as object), kind: "spending" })));
+    const imported = importEntries(db, body.entries.map((entry) => {
+      const kind = (entry as { kind?: unknown } | null)?.kind === "income" ? "income" : "spending";
+      return parseEntry({ ...(entry as object), kind });
+    }));
     res.status(201).json({ imported });
   } catch (error) {
     if (error instanceof Error) {

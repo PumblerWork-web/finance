@@ -44,7 +44,7 @@ To publish an update, increment the `version` in `package.json`, commit and push
 
 ## Importing spending from a bank PDF
 
-On the Spending page, choose **Choose PDF** under "Import from a bank statement PDF". The PDF is read locally and is not stored. Pick which rows to import and adjust categories first. Text-based PDFs work; scanned images and password-protected files do not.
+On the Spending page, choose **Choose PDF** under "Import from a bank statement PDF". The PDF is read locally and is not stored. Deposits are saved as Income and withdrawals as Spending (utilities go under "Bills"). Pick which rows to import and adjust categories first. Text-based PDFs work; scanned images and password-protected files do not.
 
 ## Local data and privacy
 

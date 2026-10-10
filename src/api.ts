@@ -91,7 +91,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ pdfBase64 }),
     }),
-  importEntries: (entries: Array<Omit<FinanceEntryInput, "kind">>) =>
+  importEntries: (entries: FinanceEntryInput[]) =>
     request<{ imported: number }>("/api/entries/import", {
       method: "POST",
       body: JSON.stringify({ entries }),

@@ -1105,7 +1105,7 @@ function StatementImport({ onImported }: { onImported: () => Promise<void> }) {
         setRows(null);
         setError("No transactions were found in that PDF. Scanned or photographed statements can't be read - download the PDF from your bank's website instead.");
       } else {
-        setRows(transactions.map((row) => ({ ...row, selected: row.direction !== "in" && !row.possibleDuplicate })));
+        setRows(transactions.map((row) => ({ ...row, selected: !row.possibleDuplicate })));
       }
     } catch (reason) {
       setRows(null);
@@ -1126,13 +1126,14 @@ function StatementImport({ onImported }: { onImported: () => Promise<void> }) {
     setBusy(true);
     try {
       const { imported } = await api.importEntries(chosen.map((row) => ({
+        kind: row.direction === "in" ? "income" as const : "spending" as const,
         amountCents: row.amountCents,
         category: row.category.trim() || "Other",
         description: row.description.slice(0, 200),
         entryDate: row.date,
       })));
       setRows(null);
-      setMessage(`Imported ${imported} ${imported === 1 ? "transaction" : "transactions"}.`);
+      setMessage(`Imported ${imported} ${imported === 1 ? "transaction" : "transactions"}: deposits went to Income, everything else to Spending.`);
       await onImported();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The transactions could not be imported.");
@@ -1146,7 +1147,7 @@ function StatementImport({ onImported }: { onImported: () => Promise<void> }) {
   return (
     <section className="panel statement-import">
       <div className="panel-heading">
-        <div><h2>Import from a bank statement PDF</h2><p>The PDF is read on this computer only and is not saved. Check the list before importing - every bank lays out statements differently.</p></div>
+        <div><h2>Import from a bank statement PDF</h2><p>Deposits are saved as Income and withdrawals as Spending. The PDF is read on this computer only and is not saved. Check the list before importing - every bank lays out statements differently.</p></div>
         <button className="secondary-button" disabled={busy} onClick={() => fileInput.current?.click()} type="button">{busy ? "Reading…" : "Choose PDF"}</button>
         <input accept="application/pdf,.pdf" hidden onChange={(event) => void choose(event)} ref={fileInput} type="file" />
       </div>
@@ -1162,7 +1163,7 @@ function StatementImport({ onImported }: { onImported: () => Promise<void> }) {
                   <tr className={row.selected ? "" : "statement-row-off"} key={index}>
                     <td><input aria-label={`Import ${row.description}`} checked={row.selected} onChange={(event) => update(index, { selected: event.target.checked })} type="checkbox" /></td>
                     <td>{formatDate(row.date, { year: "numeric" })}</td>
-                    <td>{row.description}{row.direction === "in" && <em> · money in</em>}{row.direction === "unknown" && <em> · check this one</em>}{row.possibleDuplicate && <em> · may already be saved</em>}</td>
+                    <td>{row.description}{row.direction === "in" && <em> · deposit → Income</em>}{row.direction === "unknown" && <em> · check this one</em>}{row.possibleDuplicate && <em> · may already be saved</em>}</td>
                     <td><input aria-label="Category" maxLength={80} onChange={(event) => update(index, { category: event.target.value })} value={row.category} /></td>
                     <td>{formatMoney(row.amountCents)}</td>
                   </tr>

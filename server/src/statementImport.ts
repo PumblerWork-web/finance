@@ -21,7 +21,7 @@ const CATEGORY_RULES: Array<[RegExp, string]> = [
   [/\bbp\b|shell|ampol|caltex|7-?eleven|united petrol|fuel|petrol/i, "Fuel"],
   [/mcdonald|kfc|hungry jack|domino|uber\s*eats|menulog|doordash|cafe|coffee|restaurant|bakery|pizza/i, "Dining out"],
   [/\buber\b|opal|myki|translink|parking|linkt|toll|taxi|ola\b/i, "Transport"],
-  [/\bagl\b|origin energy|energy ?australia|telstra|optus|vodafone|water|electricity|internet|nbn/i, "Utilities"],
+  [/\bagl\b|origin energy|energy ?australia|telstra|optus|vodafone|water|electricity|internet|nbn/i, "Bills"],
   [/pharmacy|chemist|priceline|medical|doctor|dental|physio|hospital/i, "Health"],
   [/netflix|spotify|disney|youtube|apple\.com|google|stan\.com|prime video/i, "Subscriptions"],
   [/insurance|nrma|aami|allianz|medibank|bupa|hcf|youi/i, "Insurance"],
@@ -181,7 +181,7 @@ export function parseStatementText(text: string, now = new Date()): Array<Omit<S
       description: row.description.slice(0, 200),
       amountCents: row.amount.cents,
       direction,
-      category: guessCategory(row.description),
+      category: direction === "in" ? "Income" : guessCategory(row.description),
     });
   });
   return result;
@@ -189,11 +189,11 @@ export function parseStatementText(text: string, now = new Date()): Array<Omit<S
 
 export function previewStatement(db: Database.Database, text: string, now = new Date()): StatementTransaction[] {
   const existing = db.prepare(
-    "SELECT entry_date AS date, amount_cents AS cents FROM finance_entry WHERE kind = 'spending'",
-  ).all() as Array<{ date: string; cents: number }>;
-  const seen = new Set(existing.map((entry) => `${entry.date}|${entry.cents}`));
+    "SELECT kind, entry_date AS date, amount_cents AS cents FROM finance_entry",
+  ).all() as Array<{ kind: string; date: string; cents: number }>;
+  const seen = new Set(existing.map((entry) => `${entry.kind}|${entry.date}|${entry.cents}`));
   return parseStatementText(text, now).map((transaction) => ({
     ...transaction,
-    possibleDuplicate: seen.has(`${transaction.date}|${transaction.amountCents}`),
+    possibleDuplicate: seen.has(`${transaction.direction === "in" ? "income" : "spending"}|${transaction.date}|${transaction.amountCents}`),
   }));
 }
