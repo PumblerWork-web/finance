@@ -133,7 +133,8 @@ export function createDatabase(
       recurrence TEXT NOT NULL CHECK (recurrence IN ('none', 'weekly', 'fortnightly', 'monthly', 'quarterly', 'yearly')),
       notes TEXT NOT NULL DEFAULT '',
       property_name TEXT NOT NULL DEFAULT 'Home',
-      insured_value_cents INTEGER NOT NULL DEFAULT 0
+      insured_value_cents INTEGER NOT NULL DEFAULT 0,
+      policy_type TEXT NOT NULL DEFAULT 'home'
     );
 
     CREATE TABLE IF NOT EXISTS app_setting (
@@ -210,6 +211,9 @@ function ensurePlannerColumns(db: Database.Database): void {
   }
   if (!columns.has("insured_value_cents")) {
     db.exec("ALTER TABLE planner_item ADD COLUMN insured_value_cents INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!columns.has("policy_type")) {
+    db.exec("ALTER TABLE planner_item ADD COLUMN policy_type TEXT NOT NULL DEFAULT 'home'");
   }
 }
 

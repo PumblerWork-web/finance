@@ -641,7 +641,8 @@ function parsePlannerItem(value: unknown): PlannerItemInput {
     typeof item.recurrence !== "string" ||
     typeof item.notes !== "string" ||
     (item.propertyName !== undefined && typeof item.propertyName !== "string") ||
-    (item.insuredValueCents !== undefined && typeof item.insuredValueCents !== "number")
+    (item.insuredValueCents !== undefined && typeof item.insuredValueCents !== "number") ||
+    (item.policyType !== undefined && typeof item.policyType !== "string")
   ) {
     throw new Error("Enter valid item details.");
   }
@@ -655,6 +656,7 @@ function parsePlannerItem(value: unknown): PlannerItemInput {
     notes: item.notes,
     propertyName: item.propertyName as string | undefined,
     insuredValueCents: item.insuredValueCents as number | undefined,
+    policyType: item.policyType as PlannerItemInput["policyType"],
   };
 }
 

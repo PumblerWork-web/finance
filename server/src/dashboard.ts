@@ -80,7 +80,7 @@ export function getDashboardData(db: Database.Database, now = new Date()): Dashb
   }
   const insuredProperties = db.prepare(
     `SELECT property_name AS propertyName, SUM(insured_value_cents) AS insuredValueCents
-     FROM planner_item WHERE kind = 'insurance' GROUP BY lower(property_name)`,
+     FROM planner_item WHERE kind = 'insurance' AND policy_type = 'home' GROUP BY lower(property_name)`,
   ).all() as Array<{ propertyName: string; insuredValueCents: number }>;
   for (const property of insuredProperties) {
     const key = property.propertyName.trim().toLocaleLowerCase();

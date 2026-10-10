@@ -54,6 +54,7 @@ import type {
   PlannerItem,
   PlannerItemInput,
   PlannerKind,
+  PolicyType,
   RecurringIncome,
   Recurrence,
 } from "./types";
@@ -1272,10 +1273,13 @@ interface PlannerDraft {
   notes: string;
   propertyName: string;
   insuredAmount: string;
+  policyType: PolicyType;
 }
 
+const policyTypeLabels: Record<PolicyType, string> = { home: "Home", income: "Income protection", life: "Life" };
+
 function emptyPlannerDraft(kind: PlannerKind): PlannerDraft {
-  return { kind, name: "", provider: "", amount: "", dueDate: todayInputDate(), recurrence: "none", notes: "", propertyName: "Home", insuredAmount: "" };
+  return { kind, name: "", provider: "", amount: "", dueDate: todayInputDate(), recurrence: "none", notes: "", propertyName: "Home", insuredAmount: "", policyType: "home" };
 }
 
 function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => Promise<void> }) {
@@ -1353,6 +1357,7 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
       notes: item.notes,
       propertyName: item.propertyName,
       insuredAmount: item.insuredValueCents ? (item.insuredValueCents / 100).toFixed(2) : "",
+      policyType: item.policyType,
     });
   }
 
@@ -1366,8 +1371,14 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
           <label>{kind === "bill" ? "Provider (optional)" : "Insurer"}<input maxLength={100} onChange={(event) => setDraft((current) => ({ ...current, provider: event.target.value }))} value={draft.provider} /></label>
           <label>{kind === "bill" ? "Amount (AUD)" : "Premium (AUD)"}<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0.01" onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))} required step="0.01" type="number" value={draft.amount} /></span></label>
           {kind === "insurance" && <>
+            <label>Type of insurance<select onChange={(event) => setDraft((current) => ({ ...current, policyType: event.target.value as PolicyType }))} value={draft.policyType}>
+              <option value="home">Home</option><option value="income">Income protection</option><option value="life">Life</option>
+            </select></label>
+            {draft.policyType === "home" ? <>
             <label>Property or home<input maxLength={80} onChange={(event) => setDraft((current) => ({ ...current, propertyName: event.target.value }))} placeholder="e.g. 12 Smith Street" required value={draft.propertyName} /></label>
             <label>Building cover (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0.01" onChange={(event) => setDraft((current) => ({ ...current, insuredAmount: event.target.value }))} required step="0.01" type="number" value={draft.insuredAmount} /></span></label>
+            </> :
+            <label>{draft.policyType === "life" ? "Sum insured (AUD)" : "Monthly benefit (AUD)"}<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0" onChange={(event) => setDraft((current) => ({ ...current, insuredAmount: event.target.value }))} step="0.01" type="number" value={draft.insuredAmount} /></span></label>}
           </>}
           <label>Next due date<input onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} required type="date" value={draft.dueDate} /></label>
           <label>Recurrence<select onChange={(event) => setDraft((current) => ({ ...current, recurrence: event.target.value as Recurrence }))} value={draft.recurrence}>
@@ -1385,7 +1396,7 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
           <div className="finance-entry-list">{items.map((item) => (
             <article className="finance-entry-row" key={item.id}>
               <div className="finance-entry-date">{formatDate(item.nextDueDate, { year: "numeric" })}</div>
-                <div className="finance-entry-details"><strong>{item.name}</strong><span>{[item.provider, item.recurrence === "none" ? "One-off" : ({ weekly: "Weekly", fortnightly: "Fortnightly", monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly", none: "One-off" }[item.recurrence])].filter(Boolean).join(" · ")}{kind === "insurance" ? ` · ${item.propertyName} · Cover ${formatMoney(item.insuredValueCents)}` : ""}{item.notes ? ` · ${item.notes}` : ""}</span></div>
+                <div className="finance-entry-details"><strong>{item.name}</strong><span>{[item.provider, item.recurrence === "none" ? "One-off" : ({ weekly: "Weekly", fortnightly: "Fortnightly", monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly", none: "One-off" }[item.recurrence])].filter(Boolean).join(" · ")}{kind === "insurance" ? (item.policyType === "home" ? ` · ${item.propertyName} · Cover ${formatMoney(item.insuredValueCents)}` : ` · ${policyTypeLabels[item.policyType]}${item.insuredValueCents ? ` · ${item.policyType === "life" ? "Sum insured" : "Monthly benefit"} ${formatMoney(item.insuredValueCents)}` : ""}`) : ""}{item.notes ? ` · ${item.notes}` : ""}</span></div>
               <strong className="finance-entry-amount">{formatMoney(item.amountCents)}</strong>
               <button className="account-delete-button" onClick={() => editItem(item)} type="button">Edit</button>
               <button className="account-delete-button" onClick={() => void removeItem(item)} type="button">Delete</button>

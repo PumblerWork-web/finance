@@ -131,8 +131,11 @@ export interface PlannerItem {
   notes: string;
   propertyName: string;
   insuredValueCents: number;
+  policyType: PolicyType;
   nextDueDate: string;
 }
+
+export type PolicyType = "home" | "income" | "life";
 
 export interface PlannerItemInput extends Omit<PlannerItem, "id" | "nextDueDate"> {}
 

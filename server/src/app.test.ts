@@ -232,6 +232,22 @@ test("recurring income is scheduled, editable, and included in dashboard and rep
   db.close();
 });
 
+test("income protection and life insurance are stored without affecting home cover", () => {
+  const db = createDatabase(":memory:");
+  const life = createPlannerItem(db, {
+    kind: "insurance", name: "Life", provider: "Acme", amountCents: 5000, dueDate: "2030-01-01",
+    recurrence: "monthly", notes: "", policyType: "life", insuredValueCents: 50_000_000,
+  });
+  const income = createPlannerItem(db, {
+    kind: "insurance", name: "Income", provider: "Acme", amountCents: 7000, dueDate: "2030-01-01",
+    recurrence: "monthly", notes: "", policyType: "income",
+  });
+  assert.equal(life.policyType, "life");
+  assert.equal(income.policyType, "income");
+  assert.equal(getDashboardData(db).propertyCoverage.length, 0);
+  db.close();
+});
+
 test("bill and insurance recurrence calculates upcoming due dates", () => {
   const db = createDatabase(":memory:");
   const recurring = createPlannerItem(db, {
