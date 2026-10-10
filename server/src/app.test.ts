@@ -470,8 +470,9 @@ test("accounts store BSB and account number and validate them", () => {
   const saved = saveAccounts(db, [
     { institution: "ME Bank", name: "Everyday", bsb: "123456", accountNumber: "12345678", type: "cash", balanceCents: 100 },
     { institution: "ME Bank", name: "Savings", type: "cash", balanceCents: 200 },
-    { institution: "AustralianSuper", name: "Balanced", websiteUrl: "https://www.australiansuper.com", bsb: "123456", accountNumber: "12345678", type: "super", balanceCents: 300 },
+    { institution: "AustralianSuper", name: "Balanced", notes: " Member 99 ", websiteUrl: "https://www.australiansuper.com", bsb: "123456", accountNumber: "12345678", type: "super", balanceCents: 300 },
   ]).filter((account) => !account.isMock);
+      assert.equal(saved.find((account) => account.name === "Balanced")?.notes, "Member 99");
   assert.equal(saved.find((account) => account.name === "Everyday")?.bsb, "123-456");
   assert.equal(saved.find((account) => account.name === "Everyday")?.accountNumber, "12345678");
   assert.equal(saved.find((account) => account.name === "Savings")?.bsb, "");

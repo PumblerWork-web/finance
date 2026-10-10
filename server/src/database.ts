@@ -169,6 +169,9 @@ function ensureAccountColumns(db: Database.Database): void {
   if (!columns.has("website_url")) {
     db.exec("ALTER TABLE financial_account ADD COLUMN website_url TEXT NOT NULL DEFAULT ''");
   }
+  if (!columns.has("notes")) {
+    db.exec("ALTER TABLE financial_account ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+  }
 }
 
 function ensureMortgageColumns(db: Database.Database): void {

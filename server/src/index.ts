@@ -396,6 +396,7 @@ app.put("/api/accounts", requireAuth, (req, res, next) => {
         (account.websiteUrl !== undefined && typeof account.websiteUrl !== "string") ||
         (account.bsb !== undefined && typeof account.bsb !== "string") ||
         (account.accountNumber !== undefined && typeof account.accountNumber !== "string") ||
+        (account.notes !== undefined && typeof account.notes !== "string") ||
         typeof account.balanceCents !== "number" ||
         (account.type !== "cash" && account.type !== "offset" && account.type !== "super")
       ) {
@@ -407,6 +408,7 @@ app.put("/api/accounts", requireAuth, (req, res, next) => {
         websiteUrl: account.websiteUrl as string | undefined,
         bsb: account.bsb as string | undefined,
         accountNumber: account.accountNumber as string | undefined,
+        notes: account.notes as string | undefined,
         balanceCents: account.balanceCents,
         type: account.type,
       };

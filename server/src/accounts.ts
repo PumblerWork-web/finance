@@ -9,6 +9,7 @@ export interface FinancialAccount {
   websiteUrl: string;
   bsb: string;
   accountNumber: string;
+  notes: string;
   type: AccountType;
   balanceCents: number;
   isMock: boolean;
@@ -20,6 +21,7 @@ export interface FinancialAccountInput {
   websiteUrl?: string;
   bsb?: string;
   accountNumber?: string;
+  notes?: string;
   type: AccountType;
   balanceCents: number;
 }
@@ -65,6 +67,7 @@ export function getAccounts(db: Database.Database): FinancialAccount[] {
               COALESCE(NULLIF(financial_account.institution, ''), provider.name, 'Sample institution') AS institution,
               financial_account.name, financial_account.website_url AS websiteUrl,
               financial_account.bsb, financial_account.account_number AS accountNumber,
+              financial_account.notes,
               financial_account.type,
               financial_account.balance_cents AS balanceCents,
               financial_account.is_mock AS isMock
@@ -100,6 +103,9 @@ export function saveAccounts(db: Database.Database, accounts: FinancialAccountIn
       normaliseAccountNumber(account.accountNumber);
     }
     normaliseWebsiteUrl(account.websiteUrl);
+    if (account.notes !== undefined && (typeof account.notes !== "string" || account.notes.length > 500)) {
+      throw new Error("Notes must be 500 characters or fewer.");
+    }
     if (!["cash", "offset", "super"].includes(account.type)) {
       throw new Error("Choose cash, offset, or super for each account.");
     }
@@ -114,8 +120,8 @@ export function saveAccounts(db: Database.Database, accounts: FinancialAccountIn
   const save = db.transaction(() => {
     db.prepare("DELETE FROM financial_account WHERE is_mock = 0").run();
     const insert = db.prepare(
-      `INSERT INTO financial_account (institution, name, website_url, bsb, account_number, type, balance_cents, is_mock)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
+      `INSERT INTO financial_account (institution, name, website_url, bsb, account_number, notes, type, balance_cents, is_mock)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
     );
     for (const account of accounts) {
       insert.run(
@@ -124,6 +130,7 @@ export function saveAccounts(db: Database.Database, accounts: FinancialAccountIn
         normaliseWebsiteUrl(account.type === "super" ? account.websiteUrl : ""),
         account.type === "super" ? "" : normaliseBsb(account.bsb),
         account.type === "super" ? "" : normaliseAccountNumber(account.accountNumber),
+        (account.notes ?? "").trim(),
         account.type,
         account.balanceCents,
       );

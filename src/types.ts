@@ -46,6 +46,7 @@ export interface FinancialAccount {
   websiteUrl: string;
   bsb: string;
   accountNumber: string;
+  notes: string;
   type: AccountType;
   balanceCents: number;
   isMock: boolean;

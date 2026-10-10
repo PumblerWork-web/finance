@@ -776,12 +776,13 @@ interface AccountDraft {
   websiteUrl: string;
   bsb: string;
   accountNumber: string;
+  notes: string;
   type: AccountType;
   balance: string;
 }
 
 function newAccountDraft(type: AccountType = "cash"): AccountDraft {
-  return { institution: "", name: "", websiteUrl: "", bsb: "", accountNumber: "", type, balance: "" };
+  return { institution: "", name: "", websiteUrl: "", bsb: "", accountNumber: "", notes: "", type, balance: "" };
 }
 
 function isSafeWebsiteUrl(value: string): boolean {
@@ -825,6 +826,7 @@ function AccountsPage({
           websiteUrl: account.websiteUrl,
           bsb: account.bsb,
           accountNumber: account.accountNumber,
+          notes: account.notes,
           type: account.type,
           balance: (account.balanceCents / 100).toFixed(2),
         })));
@@ -847,6 +849,7 @@ function AccountsPage({
         websiteUrl: account.type === "super" ? account.websiteUrl : "",
         bsb: account.type === "super" ? "" : account.bsb,
         accountNumber: account.type === "super" ? "" : account.accountNumber,
+        notes: account.notes,
         type: account.type,
         balanceCents: Math.round(Number(account.balance) * 100),
       }));
@@ -854,12 +857,13 @@ function AccountsPage({
         ? []
         : accounts
           .filter((account) => !account.isMock && account.type !== accountType)
-          .map(({ institution, name, websiteUrl, bsb, accountNumber, type, balanceCents }) => ({
+          .map(({ institution, name, websiteUrl, bsb, accountNumber, notes, type, balanceCents }) => ({
             institution,
             name,
             websiteUrl,
             bsb,
             accountNumber,
+            notes,
             type,
             balanceCents,
           }));
@@ -929,6 +933,31 @@ function AccountsPage({
     ? "View and update your superannuation accounts and balances."
     : "Keep accounts from multiple banks and funds together in one place.";
 
+  const renderAccountCard = (account: FinancialAccount) => (
+    <article className={`account-card ${account.isMock ? "sample-account" : ""}`} key={`${account.isMock ? "sample" : "saved"}-${account.id}`}>
+      <span className="account-card-icon"><Building2 size={17} /></span>
+      <div className="account-card-info">
+        <strong>{account.name}</strong>
+        <span>{account.institution || "Sample institution"} · {accountTypeLabel(account.type)}</span>
+        {account.type === "super" && account.websiteUrl && isSafeWebsiteUrl(account.websiteUrl) && (
+          <a className="account-website-link" href={account.websiteUrl} rel="noreferrer" target="_blank">Fund website <ExternalLink size={12} /></a>
+        )}
+        {account.type !== "super" && (account.bsb || account.accountNumber) && (
+          <span>{[account.bsb && `BSB ${account.bsb}`, account.accountNumber && `Acc ${account.accountNumber}`].filter(Boolean).join(" · ")}</span>
+        )}
+        {account.notes && <span className="account-notes">Notes: {account.notes}</span>}
+      </div>
+      <strong className="account-card-balance">{formatMoney(account.balanceCents)}</strong>
+      {account.isMock && <span className="sample-account-tag">SAMPLE</span>}
+      <button className="account-delete-button" onClick={() => void deleteAccount(account)} type="button">{account.isMock ? "Remove sample" : "Delete"}</button>
+    </article>
+  );
+  const bankAccounts = visibleAccounts.filter((account) => account.type !== "super");
+  const superAccounts = visibleAccounts.filter((account) => account.type === "super");
+  const accountGroups = accountType === null
+    ? [{ title: "Bank accounts", items: bankAccounts, empty: "No bank accounts added yet." }, { title: "Super accounts", items: superAccounts, empty: "No super accounts added yet." }]
+    : [];
+
   return (
     <div className="secondary-page">
       <div className="welcome-row">
@@ -956,28 +985,16 @@ function AccountsPage({
         )}
         <div className="accounts-list">
           <h2>{accountType === "super" ? "Super accounts on this device" : "Accounts on this device"}</h2>
-          {loading ? <p className="mortgage-status">Loading accounts…</p> : accounts.length === 0 ? (
-            <p className="mortgage-status">No accounts to show yet. Add one below to get started.</p>
+          {loading ? <p className="mortgage-status">Loading accounts…</p> : accountType === null ? (
+            accounts.length === 0 ? <p className="mortgage-status">No accounts to show yet. Add one below to get started.</p> : accountGroups.map((group) => (
+              <div className="account-group" key={group.title}>
+                <h3 className="account-group-title">{group.title} <span>{formatMoney(group.items.reduce((sum, item) => sum + item.balanceCents, 0))}</span></h3>
+                {group.items.length === 0 ? <p className="mortgage-status">{group.empty}</p> : group.items.map(renderAccountCard)}
+              </div>
+            ))
           ) : visibleAccounts.length === 0 ? (
             <p className="mortgage-status">No super accounts added yet. Add a super fund below to get started.</p>
-          ) : visibleAccounts.map((account) => (
-            <article className={`account-card ${account.isMock ? "sample-account" : ""}`} key={`${account.isMock ? "sample" : "saved"}-${account.id}`}>
-              <span className="account-card-icon"><Building2 size={17} /></span>
-              <div className="account-card-info">
-                <strong>{account.name}</strong>
-                <span>{account.institution || "Sample institution"} · {accountTypeLabel(account.type)}</span>
-                {account.type === "super" && account.websiteUrl && isSafeWebsiteUrl(account.websiteUrl) && (
-                  <a className="account-website-link" href={account.websiteUrl} rel="noreferrer" target="_blank">Fund website <ExternalLink size={12} /></a>
-                )}
-                {account.type !== "super" && (account.bsb || account.accountNumber) && (
-                  <span>{[account.bsb && `BSB ${account.bsb}`, account.accountNumber && `Acc ${account.accountNumber}`].filter(Boolean).join(" · ")}</span>
-                )}
-              </div>
-              <strong className="account-card-balance">{formatMoney(account.balanceCents)}</strong>
-              {account.isMock && <span className="sample-account-tag">SAMPLE</span>}
-              <button className="account-delete-button" onClick={() => void deleteAccount(account)} type="button">{account.isMock ? "Remove sample" : "Delete"}</button>
-            </article>
-          ))}
+          ) : visibleAccounts.map(renderAccountCard)}
         </div>
         <div className="accounts-divider" />
         <form className="accounts-form" onSubmit={submit}>
@@ -1032,6 +1049,10 @@ function AccountsPage({
               <label>
                 Balance (AUD)
                 <span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="-1000000000" onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, balance: event.target.value } : item))} placeholder="e.g. 5,000" required step="0.01" type="number" value={account.balance} /></span>
+              </label>
+              <label className="entry-description-field">
+                Notes (optional)
+                <textarea maxLength={500} onChange={(event) => setDrafts((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, notes: event.target.value } : item))} placeholder="e.g. member number, insurance inside super, who to call" rows={2} value={account.notes} />
               </label>
             </fieldset>
           ))}
@@ -1369,16 +1390,16 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
         <form className="finance-entry-form" onSubmit={submit}>
           <label>Name<input maxLength={100} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder={kind === "bill" ? "e.g. Electricity" : "e.g. Home insurance"} required value={draft.name} /></label>
           <label>{kind === "bill" ? "Provider (optional)" : "Insurer"}<input maxLength={100} onChange={(event) => setDraft((current) => ({ ...current, provider: event.target.value }))} value={draft.provider} /></label>
-          <label>{kind === "bill" ? "Amount (AUD)" : "Premium (AUD)"}<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0.01" onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))} required step="0.01" type="number" value={draft.amount} /></span></label>
+          <label>{kind === "bill" ? "Amount (AUD)" : "What you pay each time (AUD)"}<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0.01" onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))} required step="0.01" type="number" value={draft.amount} /></span></label>
           {kind === "insurance" && <>
             <label>Type of insurance<select onChange={(event) => setDraft((current) => ({ ...current, policyType: event.target.value as PolicyType }))} value={draft.policyType}>
               <option value="home">Home</option><option value="income">Income protection</option><option value="life">Life</option>
             </select></label>
             {draft.policyType === "home" ? <>
             <label>Property or home<input maxLength={80} onChange={(event) => setDraft((current) => ({ ...current, propertyName: event.target.value }))} placeholder="e.g. 12 Smith Street" required value={draft.propertyName} /></label>
-            <label>Building cover (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0.01" onChange={(event) => setDraft((current) => ({ ...current, insuredAmount: event.target.value }))} required step="0.01" type="number" value={draft.insuredAmount} /></span></label>
+            <label>Building cover: what it's insured for (AUD)<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0.01" onChange={(event) => setDraft((current) => ({ ...current, insuredAmount: event.target.value }))} required step="0.01" type="number" value={draft.insuredAmount} /></span></label>
             </> :
-            <label>{draft.policyType === "life" ? "Sum insured (AUD)" : "Monthly benefit (AUD)"}<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0" onChange={(event) => setDraft((current) => ({ ...current, insuredAmount: event.target.value }))} step="0.01" type="number" value={draft.insuredAmount} /></span></label>}
+            <label>{draft.policyType === "life" ? "Payout if you die (AUD, optional)" : "Payout per month if you can't work (AUD, optional)"}<span className="money-input"><span>$</span><input inputMode="decimal" max="1000000000" min="0" onChange={(event) => setDraft((current) => ({ ...current, insuredAmount: event.target.value }))} step="0.01" type="number" value={draft.insuredAmount} /></span></label>}
           </>}
           <label>Next due date<input onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} required type="date" value={draft.dueDate} /></label>
           <label>Recurrence<select onChange={(event) => setDraft((current) => ({ ...current, recurrence: event.target.value as Recurrence }))} value={draft.recurrence}>
@@ -1396,8 +1417,15 @@ function PlannerPage({ kind, onChanged }: { kind: PlannerKind; onChanged: () => 
           <div className="finance-entry-list">{items.map((item) => (
             <article className="finance-entry-row" key={item.id}>
               <div className="finance-entry-date">{formatDate(item.nextDueDate, { year: "numeric" })}</div>
-                <div className="finance-entry-details"><strong>{item.name}</strong><span>{[item.provider, item.recurrence === "none" ? "One-off" : ({ weekly: "Weekly", fortnightly: "Fortnightly", monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly", none: "One-off" }[item.recurrence])].filter(Boolean).join(" · ")}{kind === "insurance" ? (item.policyType === "home" ? ` · ${item.propertyName} · Cover ${formatMoney(item.insuredValueCents)}` : ` · ${policyTypeLabels[item.policyType]}${item.insuredValueCents ? ` · ${item.policyType === "life" ? "Sum insured" : "Monthly benefit"} ${formatMoney(item.insuredValueCents)}` : ""}`) : ""}{item.notes ? ` · ${item.notes}` : ""}</span></div>
-              <strong className="finance-entry-amount">{formatMoney(item.amountCents)}</strong>
+                <div className="finance-entry-details"><strong>{item.name}</strong>
+                  {kind === "insurance" ? <>
+                    <span>{[policyTypeLabels[item.policyType], item.provider, item.policyType === "home" ? item.propertyName : ""].filter(Boolean).join(" · ")}</span>
+                    <span><b>You pay:</b> {formatMoney(item.amountCents)} {item.recurrence === "none" ? "once" : ({ weekly: "every week", fortnightly: "every fortnight", monthly: "every month", quarterly: "every 3 months", yearly: "every year", none: "once" }[item.recurrence])}</span>
+                    {item.insuredValueCents > 0 && <span><b>{item.policyType === "home" ? "Covered for:" : item.policyType === "life" ? "Pays out if you die:" : "Pays you each month:"}</b> {formatMoney(item.insuredValueCents)}</span>}
+                    {item.notes && <span>Notes: {item.notes}</span>}
+                  </> : <span>{[item.provider, item.recurrence === "none" ? "One-off" : ({ weekly: "Weekly", fortnightly: "Fortnightly", monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly", none: "One-off" }[item.recurrence])].filter(Boolean).join(" · ")}{item.notes ? ` · ${item.notes}` : ""}</span>}
+                </div>
+              <strong className="finance-entry-amount">{formatMoney(item.amountCents)}{kind === "insurance" && <small className="entry-amount-label">premium</small>}</strong>
               <button className="account-delete-button" onClick={() => editItem(item)} type="button">Edit</button>
               <button className="account-delete-button" onClick={() => void removeItem(item)} type="button">Delete</button>
             </article>
