@@ -147,7 +147,21 @@ export function createDatabase(
   ensureMortgageColumns(db);
   ensurePlannerColumns(db);
   ensureBudgetColumns(db);
-  if (options.seedSampleData ?? true) seedMockData(db);
+  if (options.seedSampleData ?? true) {
+    seedMockData(db);
+    // Add car insurance sample data
+    db.run("INSERT INTO planner_item (kind, name, provider, amountCents, dueDate, recurrence, notes, policyType, insuredValueCents) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+      "insurance",
+      "Car Insurance",
+      "AutoCover",
+      150000,
+      "2026-04-01",
+      "monthly",
+      "Annual renewal required",
+      "auto",
+      50000000
+    ]);
+  }
   return db;
 }
 
