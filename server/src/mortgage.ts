@@ -9,6 +9,7 @@ export interface MortgageSplit {
   interestRateBps: number | null;
   repaymentCents: number | null;
   rateType: "variable" | "fixed";
+  fixedRateEndDate: string;
   repaymentFrequency: "weekly" | "fortnightly" | "monthly";
   updatedAt: string;
 }
@@ -21,6 +22,7 @@ export interface MortgageSplitInput {
   interestRateBps: number | null;
   repaymentCents: number | null;
   rateType: "variable" | "fixed";
+  fixedRateEndDate?: string;
   repaymentFrequency: "weekly" | "fortnightly" | "monthly";
 }
 
@@ -29,7 +31,7 @@ export function getMortgage(db: Database.Database): MortgageSplit[] {
     .prepare(
             `SELECT id, name, property_name AS propertyName, property_value_cents AS propertyValueCents,
               balance_cents AS balanceCents, interest_rate_bps AS interestRateBps,
-              repayment_cents AS repaymentCents, rate_type AS rateType,
+              repayment_cents AS repaymentCents, rate_type AS rateType, fixed_rate_end_date AS fixedRateEndDate,
               repayment_frequency AS repaymentFrequency, updated_at AS updatedAt
        FROM mortgage WHERE is_mock = 0 ORDER BY id`,
     )
@@ -73,6 +75,10 @@ export function saveMortgage(db: Database.Database, inputs: MortgageSplitInput[]
       if (!["variable", "fixed"].includes(input.rateType)) {
         throw new Error("Choose whether each loan split is variable or fixed.");
       }
+      const endDate = input.rateType === "fixed" ? input.fixedRateEndDate ?? "" : "";
+      if (endDate !== "" && (typeof endDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(endDate) || Number.isNaN(Date.parse(`${endDate}T00:00:00Z`)))) {
+        throw new Error("Enter a valid date for when the fixed rate ends.");
+      }
       if (!["weekly", "fortnightly", "monthly"].includes(input.repaymentFrequency)) {
         throw new Error("Choose weekly, fortnightly, or monthly for the repayment frequency.");
       }
@@ -91,8 +97,8 @@ export function saveMortgage(db: Database.Database, inputs: MortgageSplitInput[]
     db.prepare("DELETE FROM mortgage WHERE is_mock = 0").run();
     const insert = db.prepare(
       `INSERT INTO mortgage
-         (name, balance_cents, is_mock, interest_rate_bps, repayment_cents, property_name, property_value_cents, rate_type, repayment_frequency, updated_at)
-       VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+         (name, balance_cents, is_mock, interest_rate_bps, repayment_cents, property_name, property_value_cents,          rate_type, fixed_rate_end_date, repayment_frequency, updated_at)
+                VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     inputs.forEach((input) => insert.run(
       input.name.trim(),
@@ -102,6 +108,7 @@ export function saveMortgage(db: Database.Database, inputs: MortgageSplitInput[]
       (input.propertyName ?? "Home").trim(),
       input.propertyValueCents ?? 0,
       input.rateType,
+               input.rateType === "fixed" ? input.fixedRateEndDate ?? "" : "",
       input.repaymentFrequency,
       updatedAt,
     ));

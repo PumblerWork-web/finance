@@ -57,6 +57,7 @@ import type {
   PolicyType,
   RecurringIncome,
   Recurrence,
+  StatementTransaction,
 } from "./types";
 
 const navigation = [
@@ -1073,6 +1074,112 @@ function todayInputDate(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
+type ImportRow = StatementTransaction & { selected: boolean };
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(new Error("That file could not be opened."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function StatementImport({ onImported }: { onImported: () => Promise<void> }) {
+  const [rows, setRows] = useState<ImportRow[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  async function choose(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setError("");
+    setMessage("");
+    setBusy(true);
+    try {
+      const { transactions } = await api.previewStatementPdf(await readFileAsBase64(file));
+      if (transactions.length === 0) {
+        setRows(null);
+        setError("No transactions were found in that PDF. Scanned or photographed statements can't be read - download the PDF from your bank's website instead.");
+      } else {
+        setRows(transactions.map((row) => ({ ...row, selected: row.direction !== "in" && !row.possibleDuplicate })));
+      }
+    } catch (reason) {
+      setRows(null);
+      setError(reason instanceof Error ? reason.message : "That PDF could not be read.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function update(index: number, change: Partial<ImportRow>) {
+    setRows((current) => current?.map((row, i) => (i === index ? { ...row, ...change } : row)) ?? null);
+  }
+
+  async function importSelected() {
+    const chosen = rows?.filter((row) => row.selected) ?? [];
+    if (chosen.length === 0) return;
+    setError("");
+    setBusy(true);
+    try {
+      const { imported } = await api.importEntries(chosen.map((row) => ({
+        amountCents: row.amountCents,
+        category: row.category.trim() || "Other",
+        description: row.description.slice(0, 200),
+        entryDate: row.date,
+      })));
+      setRows(null);
+      setMessage(`Imported ${imported} ${imported === 1 ? "transaction" : "transactions"}.`);
+      await onImported();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "The transactions could not be imported.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const selectedCount = rows?.filter((row) => row.selected).length ?? 0;
+
+  return (
+    <section className="panel statement-import">
+      <div className="panel-heading">
+        <div><h2>Import from a bank statement PDF</h2><p>The PDF is read on this computer only and is not saved. Check the list before importing - every bank lays out statements differently.</p></div>
+        <button className="secondary-button" disabled={busy} onClick={() => fileInput.current?.click()} type="button">{busy ? "Reading…" : "Choose PDF"}</button>
+        <input accept="application/pdf,.pdf" hidden onChange={(event) => void choose(event)} ref={fileInput} type="file" />
+      </div>
+      {error && <div className="form-error" role="alert">{error}</div>}
+      {message && <div className="mortgage-success" role="status">{message}</div>}
+      {rows && (
+        <>
+          <div className="statement-table-wrap">
+            <table className="statement-table">
+              <thead><tr><th>Add</th><th>Date</th><th>Description</th><th>Category</th><th>Amount</th></tr></thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr className={row.selected ? "" : "statement-row-off"} key={index}>
+                    <td><input aria-label={`Import ${row.description}`} checked={row.selected} onChange={(event) => update(index, { selected: event.target.checked })} type="checkbox" /></td>
+                    <td>{formatDate(row.date, { year: "numeric" })}</td>
+                    <td>{row.description}{row.direction === "in" && <em> · money in</em>}{row.direction === "unknown" && <em> · check this one</em>}{row.possibleDuplicate && <em> · may already be saved</em>}</td>
+                    <td><input aria-label="Category" maxLength={80} onChange={(event) => update(index, { category: event.target.value })} value={row.category} /></td>
+                    <td>{formatMoney(row.amountCents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="finance-form-actions">
+            <button className="primary-button" disabled={busy || selectedCount === 0} onClick={() => void importSelected()} type="button">Import {selectedCount} {selectedCount === 1 ? "transaction" : "transactions"}</button>
+            <button className="secondary-button" onClick={() => setRows(null)} type="button">Cancel</button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function EntriesPage({ kind, onChanged }: { kind: "income" | "spending"; onChanged: () => Promise<void> }) {
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [recurringItems, setRecurringItems] = useState<RecurringIncome[]>([]);
@@ -1244,6 +1351,7 @@ function EntriesPage({ kind, onChanged }: { kind: "income" | "spending"; onChang
           </div>
         </form>
       </section>
+      {kind === "spending" && <StatementImport onImported={async () => { await loadEntries(); await onChanged(); }} />}
       <section className="panel finance-list-panel">
         <div className="panel-heading"><div><h2>Entries</h2><p>Most recent first.</p></div></div>
         {loading ? <p className="mortgage-status">Loading entries…</p> : entries.length === 0 ? (
@@ -1808,6 +1916,7 @@ interface MortgageSplitDraft {
   interestRate: string;
   repayment: string;
   rateType: "variable" | "fixed";
+  fixedRateEndDate: string;
   repaymentFrequency: "weekly" | "fortnightly" | "monthly";
 }
 
@@ -1820,6 +1929,7 @@ function newMortgageSplit(index: number): MortgageSplitDraft {
     interestRate: "",
     repayment: "",
     rateType: "variable",
+    fixedRateEndDate: "",
     repaymentFrequency: "monthly",
   };
 }
@@ -1845,6 +1955,7 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
             interestRate: mortgage.interestRateBps === null ? "" : (mortgage.interestRateBps / 100).toFixed(2),
             repayment: mortgage.repaymentCents === null ? "" : (mortgage.repaymentCents / 100).toFixed(2),
             rateType: mortgage.rateType,
+            fixedRateEndDate: mortgage.fixedRateEndDate,
             repaymentFrequency: mortgage.repaymentFrequency,
           }))
           : [newMortgageSplit(0)]);
@@ -1869,6 +1980,7 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
         interestRateBps: loan.interestRate === "" ? null : Math.round(Number(loan.interestRate) * 100),
         repaymentCents: loan.repayment === "" ? null : Math.round(Number(loan.repayment) * 100),
         rateType: loan.rateType,
+        fixedRateEndDate: loan.rateType === "fixed" ? loan.fixedRateEndDate : "",
         repaymentFrequency: loan.repaymentFrequency,
       })));
       setSavedMortgages(mortgages);
@@ -1925,6 +2037,12 @@ function MortgagePage({ onSaved }: { onSaved: (mortgages: MortgageSplit[]) => vo
                   <input checked={loan.rateType === "fixed"} onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, rateType: event.target.checked ? "fixed" : "variable" } : item))} type="checkbox" />
                   Fixed rate <span>{loan.rateType === "fixed" ? "Fixed" : "Variable"}</span>
                 </label>
+                {loan.rateType === "fixed" && (
+                  <label>
+                    Fixed rate ends on
+                    <input onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, fixedRateEndDate: event.target.value } : item))} required type="date" value={loan.fixedRateEndDate} />
+                  </label>
+                )}
                 <label>
                   Repayment amount (optional)
                   <span className="money-input"><span>$</span><input inputMode="decimal" min="0" onChange={(event) => setLoans((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, repayment: event.target.value } : item))} placeholder="e.g. 2,500" step="0.01" type="number" value={loan.repayment} /></span>

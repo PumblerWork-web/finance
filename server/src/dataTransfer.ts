@@ -3,7 +3,7 @@ import type Database from "better-sqlite3";
 const backupTables = {
   provider: ["id", "name", "type", "is_mock"],
   financial_account: ["id", "provider_id", "name", "type", "balance_cents", "is_mock", "institution", "bsb", "account_number", "website_url", "notes"],
-  mortgage: ["id", "name", "balance_cents", "is_mock", "interest_rate_bps", "repayment_cents", "property_name", "property_value_cents", "rate_type", "repayment_frequency", "updated_at"],
+  mortgage: ["id", "name", "balance_cents", "is_mock", "interest_rate_bps", "repayment_cents", "property_name", "property_value_cents", "rate_type", "fixed_rate_end_date", "repayment_frequency", "updated_at"],
   personal_loan: ["id", "name", "lender", "type", "balance_cents", "interest_rate_bps", "repayment_cents", "repayment_frequency", "updated_at"],
   monthly_summary: ["month", "income_cents", "spending_cents", "is_mock"],
   upcoming_item: ["id", "title", "due_date", "amount_cents", "kind", "is_mock"],
@@ -73,7 +73,7 @@ export function restoreBackup(db: Database.Database, value: unknown): void {
     }
     if (table === "mortgage" && Array.isArray(rows)) {
       tables[table] = rows.map((row) =>
-        isRecord(row) ? { property_name: "Home", property_value_cents: 0, ...row } : row,
+        isRecord(row) ? { property_name: "Home", property_value_cents: 0, fixed_rate_end_date: "", ...row } : row,
       );
     }
     if (table === "planner_item" && Array.isArray(rows)) {

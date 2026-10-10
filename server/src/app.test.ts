@@ -528,10 +528,17 @@ test("manual mortgage details replace the sample loan and persist", () => {
       interestRateBps: 575,
       repaymentCents: 100000,
       rateType: "fixed",
+      fixedRateEndDate: "2028-03-31",
       repaymentFrequency: "weekly",
     },
   ]);
   assert.equal(saved.length, 2);
+  assert.equal(saved[0].fixedRateEndDate, "");
+  assert.equal(saved[1].fixedRateEndDate, "2028-03-31");
+  assert.throws(
+    () => saveMortgage(db, [{ name: "Bad", balanceCents: 1, interestRateBps: null, repaymentCents: null, rateType: "fixed", fixedRateEndDate: "soon", repaymentFrequency: "monthly" }]),
+    /fixed rate ends/,
+  );
   assert.deepEqual(getMortgage(db), saved);
   const dashboard = getDashboardData(db, new Date("2026-10-06T00:00:00.000Z"));
   assert.equal(dashboard.mortgageCents, 51234567);

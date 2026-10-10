@@ -257,6 +257,14 @@ export function deleteEntry(db: Database.Database, id: number): boolean {
   return db.prepare("DELETE FROM finance_entry WHERE id = ?").run(id).changes > 0;
 }
 
+export function importEntries(db: Database.Database, inputs: FinanceEntryInput[]): number {
+  if (inputs.length === 0) throw new Error("Choose at least one transaction to import.");
+  if (inputs.length > 2000) throw new Error("Import up to 2,000 transactions at a time.");
+  const run = db.transaction(() => inputs.forEach((input) => createEntry(db, input)));
+  run();
+  return inputs.length;
+}
+
 function validateEntry(input: FinanceEntryInput): void {
   if (input.kind !== "income" && input.kind !== "spending") throw new Error("Choose income or spending.");
   validateAmount(input.amountCents, "amount");

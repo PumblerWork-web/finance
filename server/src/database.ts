@@ -192,6 +192,9 @@ function ensureMortgageColumns(db: Database.Database): void {
   if (!columns.has("repayment_frequency")) {
     db.exec("ALTER TABLE mortgage ADD COLUMN repayment_frequency TEXT NOT NULL DEFAULT 'monthly'");
   }
+  if (!columns.has("fixed_rate_end_date")) {
+    db.exec("ALTER TABLE mortgage ADD COLUMN fixed_rate_end_date TEXT NOT NULL DEFAULT ''");
+  }
   if (!columns.has("updated_at")) {
     db.exec("ALTER TABLE mortgage ADD COLUMN updated_at TEXT");
   }

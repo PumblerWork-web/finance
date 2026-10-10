@@ -430,3 +430,12 @@ h1, h2, p { margin-top: 0; }
   .finance-entry-amount { margin-left: auto; }
   .report-chart-panel .chart-wrap { height: 230px; }
 }
+
+.statement-import .panel-heading { align-items: center; }
+.statement-table-wrap { max-height: 420px; overflow: auto; margin: 12px 0; }
+.statement-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.statement-table th, .statement-table td { padding: 6px 8px; text-align: left; border-bottom: 1px solid rgba(128, 128, 128, 0.25); }
+.statement-table td:last-child, .statement-table th:last-child { text-align: right; white-space: nowrap; }
+.statement-table input[type="text"], .statement-table td input:not([type]) { width: 100%; min-width: 110px; }
+.statement-table em { opacity: 0.7; font-style: normal; }
+.statement-row-off { opacity: 0.55; }

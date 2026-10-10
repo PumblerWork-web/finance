@@ -61,6 +61,7 @@ export interface MortgageSplit {
   interestRateBps: number | null;
   repaymentCents: number | null;
   rateType: "variable" | "fixed";
+  fixedRateEndDate: string;
   repaymentFrequency: "weekly" | "fortnightly" | "monthly";
   updatedAt: string;
 }
@@ -93,6 +94,15 @@ export interface FinanceEntry {
 }
 
 export interface FinanceEntryInput extends Omit<FinanceEntry, "id"> {}
+
+export interface StatementTransaction {
+  date: string;
+  description: string;
+  amountCents: number;
+  direction: "out" | "in" | "unknown";
+  category: string;
+  possibleDuplicate: boolean;
+}
 
 export type IncomeRecurrence = Exclude<Recurrence, "none">;
 

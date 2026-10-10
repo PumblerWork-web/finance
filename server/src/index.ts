@@ -8,6 +8,7 @@ import { getAccounts, removeAccount, removeSampleAccount, saveAccounts, type Fin
 import { getMortgage, saveMortgage, type MortgageSplitInput } from "./mortgage";
 import { getLoans, saveLoans, type LoanInput } from "./loans";
 import { removeSampleData } from "./sampleData";
+import { extractPdfText, previewStatement } from "./statementImport";
 import {
   createEntry,
   createPlannerItem,
@@ -16,6 +17,7 @@ import {
   deleteEntry,
   deletePlannerItem,
   getFinanceReport,
+  importEntries,
   listBudgets,
   listEntries,
   listPlannerItems,
@@ -221,6 +223,42 @@ app.delete("/api/recurring-income/:id", requireAuth, (req, res) => {
 app.post("/api/entries", requireAuth, (req, res, next) => {
   try {
     res.status(201).json(createEntry(db, parseEntry(req.body)));
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+});
+
+app.post("/api/entries/import-pdf", requireAuth, async (req, res, next) => {
+  try {
+    const body = req.body as { pdfBase64?: unknown };
+    if (typeof body.pdfBase64 !== "string" || !body.pdfBase64) {
+      throw new Error("Choose a PDF file to read.");
+    }
+    const data = Buffer.from(body.pdfBase64, "base64");
+    if (data.subarray(0, 5).toString("latin1") !== "%PDF-") {
+      throw new Error("That file is not a PDF.");
+    }
+    const transactions = previewStatement(db, await extractPdfText(data));
+    res.json({ transactions });
+  } catch (error) {
+    if (error instanceof Error) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    next(error);
+  }
+});
+
+app.post("/api/entries/import", requireAuth, (req, res, next) => {
+  try {
+    const body = req.body as { entries?: unknown };
+    if (!Array.isArray(body.entries)) throw new Error("Choose transactions to import.");
+    const imported = importEntries(db, body.entries.map((entry) => parseEntry({ ...(entry as object), kind: "spending" })));
+    res.status(201).json({ imported });
   } catch (error) {
     if (error instanceof Error) {
       res.status(400).json({ error: error.message });
@@ -448,6 +486,7 @@ app.put("/api/mortgage", requireAuth, (req, res, next) => {
         (split.interestRateBps !== null && typeof split.interestRateBps !== "number") ||
         (split.repaymentCents !== null && typeof split.repaymentCents !== "number") ||
         (split.rateType !== "variable" && split.rateType !== "fixed") ||
+        (split.fixedRateEndDate !== undefined && typeof split.fixedRateEndDate !== "string") ||
         (split.repaymentFrequency !== "weekly" &&
           split.repaymentFrequency !== "fortnightly" &&
           split.repaymentFrequency !== "monthly")
@@ -462,6 +501,7 @@ app.put("/api/mortgage", requireAuth, (req, res, next) => {
         interestRateBps: split.interestRateBps,
         repaymentCents: split.repaymentCents,
         rateType: split.rateType,
+        fixedRateEndDate: split.fixedRateEndDate as string | undefined,
         repaymentFrequency: split.repaymentFrequency,
       };
     });

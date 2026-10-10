@@ -42,6 +42,10 @@ The installed app checks for updates on launch. When a newer version is availabl
 
 To publish an update, increment the `version` in `package.json`, commit and push the change, then create and push a matching version tag (for example, `v0.2.0`). The Windows desktop workflow builds the installer and publishes it to that GitHub Release. The tag version must match the package version.
 
+## Importing spending from a bank PDF
+
+On the Spending page, choose **Choose PDF** under "Import from a bank statement PDF". The PDF is read locally and is not stored. Pick which rows to import and adjust categories first. Text-based PDFs work; scanned images and password-protected files do not.
+
 ## Local data and privacy
 
 The SQLite database is created in `data/finance.sqlite` by default and is excluded from Git. Set `FINANCE_DATA_DIR` to choose a different local data directory. The account password is salted and hashed with Node.js `scrypt`; session cookies are HttpOnly, SameSite Strict, and backed by hashed session tokens in SQLite. The server binds to loopback and is not exposed to the local network.

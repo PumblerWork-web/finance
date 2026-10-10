@@ -14,6 +14,7 @@ import type {
   PlannerKind,
   RecurringIncome,
   RecurringIncomeInput,
+  StatementTransaction,
 } from "./types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -85,6 +86,16 @@ export const api = {
   updateEntry: (id: number, entry: FinanceEntryInput) =>
     request<FinanceEntry>(`/api/entries/${id}`, { method: "PUT", body: JSON.stringify(entry) }),
   deleteEntry: (id: number) => request<void>(`/api/entries/${id}`, { method: "DELETE" }),
+  previewStatementPdf: (pdfBase64: string) =>
+    request<{ transactions: StatementTransaction[] }>("/api/entries/import-pdf", {
+      method: "POST",
+      body: JSON.stringify({ pdfBase64 }),
+    }),
+  importEntries: (entries: Array<Omit<FinanceEntryInput, "kind">>) =>
+    request<{ imported: number }>("/api/entries/import", {
+      method: "POST",
+      body: JSON.stringify({ entries }),
+    }),
   recurringIncome: () => request<RecurringIncome[]>("/api/recurring-income"),
   createRecurringIncome: (item: RecurringIncomeInput) =>
     request<RecurringIncome>("/api/recurring-income", { method: "POST", body: JSON.stringify(item) }),
