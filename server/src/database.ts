@@ -150,17 +150,19 @@ export function createDatabase(
   if (options.seedSampleData ?? true) {
     seedMockData(db);
     // Add car insurance sample data
-    db.run("INSERT INTO planner_item (kind, name, provider, amountCents, dueDate, recurrence, notes, policyType, insuredValueCents) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
-      "insurance",
-      "Car Insurance",
-      "AutoCover",
-      150000,
-      "2026-04-01",
-      "monthly",
-      "Annual renewal required",
-      "auto",
-      50000000
-    ]);
+    db.prepare(
+  "INSERT INTO planner_item (kind, name, provider, amount_cents, due_date, recurrence, notes, policy_type, insured_value_cents) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(
+  "insurance",
+  "Car Insurance",
+  "AutoCover",
+  150000,
+  "2026-04-01",
+  "monthly",
+  "Annual renewal required",
+  "auto",
+  50000000
+  );
   }
   return db;
 }
